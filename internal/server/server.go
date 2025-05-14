@@ -3,26 +3,29 @@ package server
 
 import (
 	"context"
-	"hairy-botter/internal/logic"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 )
 
+type ai interface {
+	HandleMessage(ctx context.Context, userID string, msg string) (string, error)
+}
+
 // Server .
 type Server struct {
 	h     *chi.Mux
 	srv   *http.Server
-	logic *logic.Logic
+	logic ai
 }
 
 // New .
-func New(addr string, logic *logic.Logic) *Server {
+func New(addr string, aiLogic ai) *Server {
 	h := chi.NewMux()
 	s := &Server{
 		h:     h,
 		srv:   &http.Server{Addr: addr, Handler: h},
-		logic: logic,
+		logic: aiLogic,
 	}
 	s.addRoutes()
 

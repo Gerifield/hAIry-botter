@@ -27,10 +27,12 @@ Optional env variable(s):
 
 ### Running the server
 
-Run the server:
+Run the server from source:
 ```
 go run cmd/bot-server/main.go
 ```
+
+But feel free to download a pre-build package and then just run the binary. The env variables are still the same.
 
 ### Example call without unique user id:
 

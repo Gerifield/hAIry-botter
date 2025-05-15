@@ -9,7 +9,6 @@ There could be many improvements for example:
 - Add more AI backends
 - Add a better history store
 - Add actually usable (chat) frontends
-- Add optional userID parameter instead of a cookie sessionID for easier developer usage
 
 Right now you just need a frontend for any kind of chat and you can call this stuff.
 
@@ -33,6 +32,10 @@ Run the server:
 go run cmd/bot-server/main.go
 ```
 
+### Example call without unique user id:
+
+If you don't have a user id, you can call the server without it. This will create a new session cookie and store an ID in it.
+
 Example call for the server:
 ```
 curl -v -X POST http://127.0.0.1:8080/message -d "message=Hi there"
@@ -43,6 +46,15 @@ This will return a cookie which will have a `sessionID`. You need to use this if
 ```
 curl -v -X POST -H "Cookie: sessionID=MGVQOSOZWPMKWAJBQN5KWFR3DF" http://127.0.0.1:8080/message -d "message=Hi there"
 ```
+
+### Example call without unique user id:
+
+If you have a user id, you can use it in the call.
+
+```
+curl -v -H "X-User-ID: someuserid1" -X POST http://127.0.0.1:8080/message -d "message=Hi there"
+```
+
 
 All the history will be stored under the `history-gemini` folder.
 

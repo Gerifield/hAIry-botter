@@ -25,6 +25,8 @@ Optional env variable(s):
 - `ADDR` - Listen address for the server (Default: `:8080`)
 - `GEMINI_MODEL` - Model to use (Default: `gemini-2.5-flash-preview-04-17`)
 
+All the history will be stored under the `history-gemini` folder.
+
 ### Running the server
 
 Run the server from source:
@@ -58,7 +60,22 @@ curl -v -H "X-User-ID: someuserid1" -X POST http://127.0.0.1:8080/message -d "me
 ```
 
 
-All the history will be stored under the `history-gemini` folder.
+### Client examples
+
+#### CLI client
+
+You can use the CLI client to call the server. It should work out of the box, but there are some optional enviroment variables:
+- `SERVER_URL` - Server base URL if it was changed from the port 8080
+
+```
+go run cmd/cli-client/main.go
+```
+
+This will lunch an interactive terminal to discuss with.
+
+Feel free to use the generated binary in the release as well.
+
+![cli-client](examples/client-cli-demo.svg)
 
 ### Notes
 

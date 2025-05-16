@@ -1,5 +1,7 @@
 # hAIry Botter
 
+<img src="https://github.com/user-attachments/assets/10e49300-eb17-41a3-b8c9-affd399c8810" width=250 />
+
 Chatbots are useful, especially after reading about the [https://github.com/YonkoSam/whatsapp-python-chatbot](https://github.com/YonkoSam/whatsapp-python-chatbot) on Reddit.
 I thought why not create a bit more flexible one, not hardcoding to any kind of frontend.
 

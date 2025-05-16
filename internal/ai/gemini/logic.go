@@ -73,10 +73,21 @@ func New(logger *slog.Logger, client *genai.Client, model string, historyPath st
 			}
 
 			for _, t := range toolsResult.Tools {
+
+				// Conversion for schema
+				b, _ := t.InputSchema.MarshalJSON()
+				convSchema := &genai.Schema{}
+				schemaErr := convSchema.UnmarshalJSON(b)
+				if schemaErr != nil {
+					slog.Error("Failed to unmarshal parameter schema", "error", schemaErr)
+
+					continue
+				}
+
 				functions = append(functions, &genai.FunctionDeclaration{
 					Name:        t.Name,
 					Description: t.Description,
-					// TODO: might be good to have the rest somehow...
+					Parameters:  convSchema,
 				})
 			}
 
@@ -128,6 +139,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 	}
 
 	// Check and handle function calls
+	msgParts := make([]genai.Part, 0)
 	if calls := resp.FunctionCalls(); len(calls) > 0 {
 		for _, call := range calls {
 			// fmt.Println(call.ID, call.Name, call.Args)
@@ -142,7 +154,6 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 
 				continue
 			}
-			// TODO(!!!!!): Collect more call results in a single response
 
 			// TODO: Add more than text support?
 			var textOutput string
@@ -155,8 +166,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 
 			slog.Info("function call result", slog.String("id", call.ID), slog.String("function", call.Name), slog.String("output", textOutput))
 
-			// Resend with the function output
-			resp, err = ch.SendMessage(ctx,
+			msgParts = append(msgParts,
 				genai.Part{
 					FunctionResponse: &genai.FunctionResponse{
 						ID:   call.ID, // Opt. only
@@ -166,9 +176,12 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 							// "error"
 						},
 					}})
-			if err != nil {
-				return "", err
-			}
+		}
+
+		// Resend with the function output
+		resp, err = ch.SendMessage(ctx, msgParts...)
+		if err != nil {
+			return "", err
 		}
 	}
 

@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/client/transport"
 	"google.golang.org/genai"
 	"hairy-botter/internal/ai/gemini"
 	"hairy-botter/internal/server"
@@ -33,8 +35,28 @@ func main() {
 		geminiModel = "gemini-2.5-flash-preview-04-17" // For now
 	}
 
+	var mcpClient *client.Client
+	mcpServer := os.Getenv("MCP_SSE_SERVER")
+	if mcpServer != "" {
+		logger.Info("init SSE MCP server", slog.String("server", mcpServer))
+		sseTransport, err := transport.NewSSE(mcpServer)
+		if err != nil {
+			logger.Error("failed to create SSE transport", slog.String("err", err.Error()))
+
+			return
+		}
+
+		if err = sseTransport.Start(context.Background()); err != nil {
+			logger.Error("failed to start SSE transport", slog.String("err", err.Error()))
+
+			return
+		}
+
+		mcpClient = client.NewClient(sseTransport)
+	}
+
 	// Initialize the AI logic
-	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{
+	aiClient, err := genai.NewClient(context.Background(), &genai.ClientConfig{
 		APIKey:  geminiKey,
 		Backend: genai.BackendGeminiAPI,
 	})
@@ -44,7 +66,7 @@ func main() {
 		return
 	}
 
-	aiLogic, err := gemini.New(logger, client, geminiModel, "history-gemini/")
+	aiLogic, err := gemini.New(logger, aiClient, geminiModel, "history-gemini/", mcpClient)
 	if err != nil {
 		logger.Error("failed to create gemini logic", slog.String("err", err.Error()))
 

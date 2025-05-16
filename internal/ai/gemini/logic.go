@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/mark3labs/mcp-go/client"
-	"github.com/mark3labs/mcp-go/mcp"
 	"log/slog"
 	"os"
 
+	"github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/mcp"
 	"google.golang.org/genai"
 )
 
@@ -160,8 +160,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 			var textOutput string
 			for _, content := range callRes.Content {
 				if textContent, ok := content.(mcp.TextContent); ok {
-					// TODO: make this optiomal
-					textOutput = textOutput + textContent.Text
+					textOutput = fmt.Sprintf("%s %s", textOutput, textContent.Text)
 				}
 			}
 

@@ -141,6 +141,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 	// Check and handle function calls
 	msgParts := make([]genai.Part, 0)
 	if calls := resp.FunctionCalls(); len(calls) > 0 {
+		l.logger.Info("function calls detected", slog.Int("calls", len(calls)))
 		for _, call := range calls {
 			// fmt.Println(call.ID, call.Name, call.Args)
 			l.logger.Info("initiating function call", slog.String("id", call.ID), slog.String("function", call.Name), slog.Any("args", call.Args))

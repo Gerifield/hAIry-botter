@@ -10,7 +10,6 @@ So this project was born, a simple HTTP based server, with history storing.
 There could be many improvements for example:
 - Add more AI backends
 - Add a better history store
-- Add actually usable (chat) frontends
 
 Right now you just need a frontend for any kind of chat and you can call this stuff.
 

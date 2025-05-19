@@ -17,11 +17,15 @@ func main() {
 
 	accessToken := os.Getenv("ACCESS_TOKEN")
 	verifyToken := os.Getenv("VERIFY_TOKEN")
-	baseURL := os.Getenv("GRAPHQL_URL")
-	if accessToken == "" || verifyToken == "" || baseURL == "" {
-		fmt.Println("ACCESS_TOKEN, VERIFY_TOKEN and GRAPHQL_URL must be set")
+	if accessToken == "" || verifyToken == "" {
+		fmt.Println("ACCESS_TOKEN and VERIFY_TOKEN must be set")
 
 		return
+	}
+
+	baseURL := os.Getenv("GRAPHQL_URL")
+	if baseURL == "" {
+		baseURL = "https://graph.facebook.com/v22.0"
 	}
 
 	addr := os.Getenv("ADDR")

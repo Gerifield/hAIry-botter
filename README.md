@@ -80,6 +80,26 @@ Feel free to use the generated binary in the release as well.
 
 ![cli-client](examples/client-cli-demo.svg)
 
+
+#### Facebook messenger client
+
+You can connect the server to Facebook Messenger with this, you will need to have a page and setup the secrets properly. (How to do it is not the scope of this doc.)
+
+Required env variables:
+- `ACCESS_TOKEN` - Access token from the Developer portal
+- `VERIFY_TOKEN` - Verify token from the Developer portal you setup
+
+Optional env variables:
+- `GRAPHQL_URL` - GraphQL base url (Default: `https://graph.facebook.com/v22.0`)
+- `ADDR` - Server listening address (Default: `:8082`)
+- `AI_SERVICE` - AI service (the server-bot's) address (Default: `http://127.0.0.1:8080`)
+
+Then you can start chatting with the bot via sending a message to the page.
+(If you configured an MCP in the AI service it will be called too.)
+
+For local testing you can use ngrok to expose the URL and test it via the Messenger app.
+(For example: `ngrok http 8082`)
+
 ### Notes
 
 Please do not run this server publicly available for your own safety. (And for your budget, if it is public, anybody can use it and it can quickly add up in the Gemini API usage.)

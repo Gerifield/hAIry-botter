@@ -26,9 +26,11 @@ Required env variable(s):
 Optional env variable(s):
 - `ADDR` - Listen address for the server (Default: `:8080`)
 - `GEMINI_MODEL` - Model to use (Default: `gemini-2.5-flash-preview-04-17`)
-- `MCP_SSE_SERVER` - MCP SSE server for external function calls (Eg.: `http://localhost:8081/sse`)
+- `MCP_SSE_SERVERS` - MCP SSE server for external function calls (Eg.: `http://localhost:8081/sse`), this could be a comma separated list for multiple servers
 
 All the history will be stored under the `history-gemini` folder.
+
+_Note: You can't use the same function name from different MCP servers, since we map the function with the clients, the same function name will override the previous one!_
 
 ### Running the server
 

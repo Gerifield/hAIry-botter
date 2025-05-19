@@ -201,6 +201,8 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 					}})
 		}
 
+		// Question: Is it possible to return a function?
+		// TODO: Resend multiple times until there is no function call left if that is possible
 		// Resend with the function output
 		resp, err = ch.SendMessage(ctx, msgParts...)
 		if err != nil {

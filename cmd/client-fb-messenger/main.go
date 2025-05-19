@@ -137,7 +137,7 @@ func (fbm *FBMessenger) webhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("X-User-ID", message.Entry[0].Messaging[0].Sender.ID)
+	req.Header.Set("X-User-ID", fmt.Sprintf("fb-%s", message.Entry[0].Messaging[0].Sender.ID))
 
 	resp, err := fbm.httpClient.Do(req)
 	if err != nil {

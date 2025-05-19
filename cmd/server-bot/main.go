@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 )
 
 func main() {
@@ -35,24 +36,30 @@ func main() {
 		geminiModel = "gemini-2.5-flash-preview-04-17" // For now
 	}
 
-	var mcpClient *client.Client
-	mcpServer := os.Getenv("MCP_SSE_SERVER")
+	mcpClients := make([]*client.Client, 0)
+	mcpServer := os.Getenv("MCP_SSE_SERVERS")
 	if mcpServer != "" {
-		logger.Info("init SSE MCP server", slog.String("server", mcpServer))
-		sseTransport, err := transport.NewSSE(mcpServer)
-		if err != nil {
-			logger.Error("failed to create SSE transport", slog.String("err", err.Error()))
+		// Parse the MCP server list
+		servers := strings.Split(mcpServer, ",")
+		for _, s := range servers {
+			s = strings.TrimSpace(s)
 
-			return
+			logger.Info("init SSE MCP server", slog.String("server", mcpServer))
+			sseTransport, err := transport.NewSSE(mcpServer)
+			if err != nil {
+				logger.Error("failed to create SSE transport", slog.String("err", err.Error()))
+
+				return
+			}
+
+			if err = sseTransport.Start(context.Background()); err != nil {
+				logger.Error("failed to start SSE transport", slog.String("err", err.Error()))
+
+				return
+			}
+
+			mcpClients = append(mcpClients, client.NewClient(sseTransport))
 		}
-
-		if err = sseTransport.Start(context.Background()); err != nil {
-			logger.Error("failed to start SSE transport", slog.String("err", err.Error()))
-
-			return
-		}
-
-		mcpClient = client.NewClient(sseTransport)
 	}
 
 	// Initialize the AI logic
@@ -66,7 +73,7 @@ func main() {
 		return
 	}
 
-	aiLogic, err := gemini.New(logger, aiClient, geminiModel, "history-gemini/", mcpClient)
+	aiLogic, err := gemini.New(logger, aiClient, geminiModel, "history-gemini/", mcpClients)
 	if err != nil {
 		logger.Error("failed to create gemini logic", slog.String("err", err.Error()))
 

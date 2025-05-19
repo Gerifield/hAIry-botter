@@ -24,84 +24,94 @@ type Logic struct {
 	historyPath string
 	persona     *genai.Content
 
-	mcpClient *client.Client
-	// mcpTools  []*mcp.Tool
+	// MCP related fields
+	// We have multiple clients in a list
+	mcpClients []*client.Client
+	// We store all the function in the same list -> we need a mapping for the clients
 	mcpFunctions []*genai.FunctionDeclaration
+	// map function name to client index -> Note: this prevents to reuse the same function name!!
+	mcpFunctionMap map[string]int
 }
 
 // New .
-func New(logger *slog.Logger, client *genai.Client, model string, historyPath string, mcpClient *client.Client) (*Logic, error) {
+func New(logger *slog.Logger, client *genai.Client, model string, historyPath string, mcpClients []*client.Client) (*Logic, error) {
 
 	persona, err := readPersonality()
 	if err != nil {
 		return nil, err
 	}
 
+	fnMapping := make(map[string]int)
 	functions := make([]*genai.FunctionDeclaration, 0)
-	if mcpClient != nil {
-		logger.Info("MCP client is not nil, initializing MCP client")
-		initRequest := mcp.InitializeRequest{}
-		initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
-		initRequest.Params.ClientInfo = mcp.Implementation{
-			Name:    "MCP-Go Simple Client Example",
-			Version: "1.0.0",
-		}
+	if len(mcpClients) > 0 {
+		logger.Info("MCP client list is not empty, initializing MCP clients")
 
-		initRequest.Params.Capabilities = mcp.ClientCapabilities{}
-
-		ctx := context.Background()
-		mcpServerInfo, err := mcpClient.Initialize(ctx, initRequest)
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize mcp client: %w", err)
-		}
-
-		logger.Info("MCP server init success",
-			slog.String("serverName", mcpServerInfo.ServerInfo.Name),
-			slog.String("serverVersion", mcpServerInfo.ServerInfo.Version),
-			slog.Any("serverCapabilities", mcpServerInfo.Capabilities))
-
-		if mcpServerInfo.Capabilities.Tools != nil {
-			logger.Info("Fetching available tools...")
-			toolsRequest := mcp.ListToolsRequest{}
-			toolsResult, err := mcpClient.ListTools(ctx, toolsRequest)
-			if err != nil {
-				logger.Error("Failed to list tools", "error", err)
-				return nil, err
-			} else {
-				logger.Info("Tools available", slog.Int("toolsCount", len(toolsResult.Tools)),
-					slog.Any("tools", toolsResult.Tools))
+		for idx, mcpClient := range mcpClients {
+			initRequest := mcp.InitializeRequest{}
+			initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
+			initRequest.Params.ClientInfo = mcp.Implementation{
+				Name:    "MCP-Go Simple Client Example",
+				Version: "1.0.0",
 			}
 
-			for _, t := range toolsResult.Tools {
+			initRequest.Params.Capabilities = mcp.ClientCapabilities{}
 
-				// Conversion for schema
-				b, _ := t.InputSchema.MarshalJSON()
-				convSchema := &genai.Schema{}
-				schemaErr := convSchema.UnmarshalJSON(b)
-				if schemaErr != nil {
-					slog.Error("Failed to unmarshal parameter schema", "error", schemaErr)
+			ctx := context.Background()
+			mcpServerInfo, err := mcpClient.Initialize(ctx, initRequest)
+			if err != nil {
+				return nil, fmt.Errorf("failed to initialize mcp client: %w", err)
+			}
 
-					continue
+			logger.Info("MCP server init success",
+				slog.String("serverName", mcpServerInfo.ServerInfo.Name),
+				slog.String("serverVersion", mcpServerInfo.ServerInfo.Version),
+				slog.Any("serverCapabilities", mcpServerInfo.Capabilities))
+
+			if mcpServerInfo.Capabilities.Tools != nil {
+				logger.Info("Fetching available tools...")
+				toolsRequest := mcp.ListToolsRequest{}
+				toolsResult, err := mcpClient.ListTools(ctx, toolsRequest)
+				if err != nil {
+					logger.Error("Failed to list tools", "error", err)
+					return nil, err
+				} else {
+					logger.Info("Tools available", slog.Int("toolsCount", len(toolsResult.Tools)),
+						slog.Any("tools", toolsResult.Tools))
 				}
 
-				functions = append(functions, &genai.FunctionDeclaration{
-					Name:        t.Name,
-					Description: t.Description,
-					Parameters:  convSchema,
-				})
-			}
+				for _, t := range toolsResult.Tools {
+					// Conversion for schema
+					b, _ := t.InputSchema.MarshalJSON()
+					convSchema := &genai.Schema{}
+					schemaErr := convSchema.UnmarshalJSON(b)
+					if schemaErr != nil {
+						slog.Error("Failed to unmarshal parameter schema", "error", schemaErr)
 
+						continue
+					}
+
+					functions = append(functions, &genai.FunctionDeclaration{
+						Name:        t.Name,
+						Description: t.Description,
+						Parameters:  convSchema,
+					})
+
+					// Add to the mapping fn name -> client index
+					fnMapping[t.Name] = idx
+				}
+			}
 		}
 	}
 
 	return &Logic{
-		logger:       logger,
-		client:       client,
-		model:        model,
-		historyPath:  historyPath,
-		persona:      persona,
-		mcpClient:    mcpClient,
-		mcpFunctions: functions,
+		logger:         logger,
+		client:         client,
+		model:          model,
+		historyPath:    historyPath,
+		persona:        persona,
+		mcpClients:     mcpClients,
+		mcpFunctions:   functions,
+		mcpFunctionMap: fnMapping,
 	}, nil
 }
 
@@ -124,7 +134,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 	}
 
 	// Add MCP tools if available
-	if l.mcpClient != nil {
+	if len(l.mcpClients) > 0 {
 		createConfig.Tools = []*genai.Tool{
 			{FunctionDeclarations: l.mcpFunctions},
 		}
@@ -152,10 +162,16 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 			// fmt.Println(call.ID, call.Name, call.Args)
 			logger.Info("initiating function call", slog.String("id", call.ID), slog.String("function", call.Name), slog.Any("args", call.Args))
 
+			clientIdx, ok := l.mcpFunctionMap[call.Name]
+			if !ok {
+				logger.Error("function call not found in MCP function list", slog.String("function", call.Name))
+
+				continue
+			}
 			ctr := mcp.CallToolRequest{}
 			ctr.Params.Name = call.Name
 			ctr.Params.Arguments = call.Args
-			callRes, err := l.mcpClient.CallTool(ctx, ctr)
+			callRes, err := l.mcpClients[clientIdx].CallTool(ctx, ctr)
 			if err != nil {
 				logger.Error("Failed to call tool", "error", err)
 

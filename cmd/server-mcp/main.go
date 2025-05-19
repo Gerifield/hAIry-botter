@@ -37,6 +37,7 @@ func main() {
 }
 
 func handleSomeRandomFunction(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	slog.Info("handling SomeRandomFunction", slog.Any("request", request))
 	name := ""
 	if nameArg, ok := request.Params.Arguments["name"]; ok {
 		if nameConverted, ok := nameArg.(string); ok {

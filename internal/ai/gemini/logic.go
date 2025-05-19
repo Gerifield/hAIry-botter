@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -29,7 +30,6 @@ type Logic struct {
 }
 
 // New .
-// TODO: we could use a "history storage" later, now keep it dumb
 func New(logger *slog.Logger, client *genai.Client, model string, historyPath string, mcpClient *client.Client) (*Logic, error) {
 
 	persona, err := readPersonality()
@@ -39,7 +39,7 @@ func New(logger *slog.Logger, client *genai.Client, model string, historyPath st
 
 	functions := make([]*genai.FunctionDeclaration, 0)
 	if mcpClient != nil {
-		slog.Info("MCP client is not nil, initializing MCP client")
+		logger.Info("MCP client is not nil, initializing MCP client")
 		initRequest := mcp.InitializeRequest{}
 		initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 		initRequest.Params.ClientInfo = mcp.Implementation{
@@ -55,20 +55,20 @@ func New(logger *slog.Logger, client *genai.Client, model string, historyPath st
 			return nil, fmt.Errorf("failed to initialize mcp client: %w", err)
 		}
 
-		slog.Info("MCP server init success",
+		logger.Info("MCP server init success",
 			slog.String("serverName", mcpServerInfo.ServerInfo.Name),
 			slog.String("serverVersion", mcpServerInfo.ServerInfo.Version),
 			slog.Any("serverCapabilities", mcpServerInfo.Capabilities))
 
 		if mcpServerInfo.Capabilities.Tools != nil {
-			slog.Info("Fetching available tools...")
+			logger.Info("Fetching available tools...")
 			toolsRequest := mcp.ListToolsRequest{}
 			toolsResult, err := mcpClient.ListTools(ctx, toolsRequest)
 			if err != nil {
-				slog.Error("Failed to list tools", "error", err)
+				logger.Error("Failed to list tools", "error", err)
 				return nil, err
 			} else {
-				slog.Info("Tools available", slog.Int("toolsCount", len(toolsResult.Tools)),
+				logger.Info("Tools available", slog.Int("toolsCount", len(toolsResult.Tools)),
 					slog.Any("tools", toolsResult.Tools))
 			}
 
@@ -111,6 +111,8 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 	if sessionID == "" {
 		return "", errors.New("sessionID is empty")
 	}
+	logger := l.logger.With("sessionID", sessionID)
+	logger.Info("handling message", slog.String("message", msg))
 
 	hist, err := l.readHistory(sessionID)
 	if err != nil {
@@ -128,43 +130,48 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 		}
 	}
 
+	logger.Info("creating chat content")
 	ch, err := l.client.Chats.Create(ctx, l.model, createConfig, hist)
 	if err != nil {
 		return "", err
 	}
 
+	logger.Info("sending message")
 	resp, err := ch.SendMessage(ctx, genai.Part{Text: msg})
 	if err != nil {
 		return "", err
 	}
 
+	logger.Info("response received", slog.String("response", resp.Text()))
+
 	// Check and handle function calls
 	msgParts := make([]genai.Part, 0)
 	if calls := resp.FunctionCalls(); len(calls) > 0 {
-		l.logger.Info("function calls detected", slog.Int("calls", len(calls)))
+		logger.Info("function calls detected", slog.Int("calls", len(calls)))
 		for _, call := range calls {
 			// fmt.Println(call.ID, call.Name, call.Args)
-			l.logger.Info("initiating function call", slog.String("id", call.ID), slog.String("function", call.Name), slog.Any("args", call.Args))
+			logger.Info("initiating function call", slog.String("id", call.ID), slog.String("function", call.Name), slog.Any("args", call.Args))
 
 			ctr := mcp.CallToolRequest{}
 			ctr.Params.Name = call.Name
 			ctr.Params.Arguments = call.Args
 			callRes, err := l.mcpClient.CallTool(ctx, ctr)
 			if err != nil {
-				l.logger.Error("Failed to call tool", "error", err)
+				logger.Error("Failed to call tool", "error", err)
 
 				continue
 			}
 
 			// TODO: Add more than text support?
-			var textOutput string
+			textOutputs := make([]string, 0)
 			for _, content := range callRes.Content {
 				if textContent, ok := content.(mcp.TextContent); ok {
-					textOutput = fmt.Sprintf("%s %s", textOutput, textContent.Text)
+					textOutputs = append(textOutputs, textContent.Text)
 				}
 			}
 
-			slog.Info("function call result", slog.String("id", call.ID), slog.String("function", call.Name), slog.String("output", textOutput))
+			textOutput := strings.Join(textOutputs, " ")
+			logger.Info("function call result", slog.String("id", call.ID), slog.String("function", call.Name), slog.String("output", textOutput))
 
 			msgParts = append(msgParts,
 				genai.Part{

@@ -171,6 +171,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 			ctr := mcp.CallToolRequest{}
 			ctr.Params.Name = call.Name
 			ctr.Params.Arguments = call.Args
+			ctx = context.WithValue(ctx, "x-session-id", sessionID)
 			callRes, err := l.mcpClients[clientIdx].CallTool(ctx, ctr)
 			if err != nil {
 				logger.Error("Failed to call tool", "error", err)

@@ -89,6 +89,7 @@ You can connect the server to Facebook Messenger with this, you will need to hav
 Required env variables:
 - `ACCESS_TOKEN` - Access token from the Developer portal
 - `VERIFY_TOKEN` - Verify token from the Developer portal you setup
+- `APP_SECRET` - App secret from the Developer portal you setup
 
 Optional env variables:
 - `GRAPHQL_URL` - GraphQL base url (Default: `https://graph.facebook.com/v22.0`)

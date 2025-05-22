@@ -226,8 +226,16 @@ type Message struct {
 			} `json:"recipient"`
 			Timestamp int64 `json:"timestamp"`
 			Message   struct {
-				Mid  string `json:"mid"`
-				Text string `json:"text"`
+				Mid         string `json:"mid"`
+				Text        string `json:"text"`
+				Attachments []struct {
+					Type    string `json:"type"`
+					Payload struct {
+						Title string `json:"title"`
+						URL   string `json:"url"`
+						// etc.
+					} `json:"payload"`
+				} `json:"attachments"`
 			} `json:"message"`
 		} `json:"messaging"`
 	} `json:"entry"`

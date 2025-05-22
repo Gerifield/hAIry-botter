@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,8 +20,9 @@ func main() {
 
 	accessToken := os.Getenv("ACCESS_TOKEN")
 	verifyToken := os.Getenv("VERIFY_TOKEN")
-	if accessToken == "" || verifyToken == "" {
-		fmt.Println("ACCESS_TOKEN and VERIFY_TOKEN must be set")
+	appSecret := os.Getenv("APP_SECRET")
+	if accessToken == "" || verifyToken == "" || appSecret == "" {
+		fmt.Println("ACCESS_TOKEN, VERIFY_TOKEN and APP_SECRET must be set")
 
 		return
 	}
@@ -38,7 +42,7 @@ func main() {
 		aiSrv = "http://127.0.0.1:8080"
 	}
 
-	ms := New(addr, accessToken, verifyToken, baseURL, aiSrv)
+	ms := New(addr, accessToken, verifyToken, appSecret, baseURL, aiSrv)
 
 	log.Printf("Starting server on %s\n", addr)
 	if err := ms.ListenAndServe(); err != nil {
@@ -51,17 +55,19 @@ type FBMessenger struct {
 	addr        string
 	accessToken string
 	verifyToken string
+	appSecret   string
 	baseURL     string
 	aiSrv       string
 	httpClient  *http.Client
 }
 
 // New .
-func New(addr, accessToken, verifyToken, baseURL, aiSrv string) *FBMessenger {
+func New(addr, accessToken, verifyToken, appSecret, baseURL, aiSrv string) *FBMessenger {
 	return &FBMessenger{
 		addr:        addr,
 		accessToken: accessToken,
 		verifyToken: verifyToken,
+		appSecret:   appSecret,
 		baseURL:     baseURL,
 		aiSrv:       aiSrv,
 		httpClient:  &http.Client{},
@@ -82,8 +88,6 @@ func (fbm *FBMessenger) ListenAndServe() error {
 }
 
 func (fbm *FBMessenger) webhook(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		log.Printf("invalid method: not get or post")
 
@@ -110,19 +114,42 @@ func (fbm *FBMessenger) webhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: validate the payload
+	// Validate the payload
 	// https://developers.facebook.com/docs/messenger-platform/webhooks#validate-payloads
+	signature := r.Header.Get("X-Hub-Signature-256")
+	if signature == "" {
+		log.Println("missing X-Hub-Signature-256 header")
+		http.Error(w, "missing X-Hub-Signature-256 header", http.StatusBadRequest)
+
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("failed to read body: %v", err)
+		http.Error(w, "failed to read body", http.StatusBadRequest)
+		return
+	}
+
+	if !validateSignature(body, signature, fbm.appSecret) {
+		log.Println("invalid X-Hub-Signature header")
+		http.Error(w, "invalid X-Hub-Signature header", http.StatusBadRequest)
+		return
+	}
 
 	// initiate Message data structure to message variable
 	var message Message
-	if err := json.NewDecoder(r.Body).Decode(&message); err != nil {
+	err = json.Unmarshal(body, &message)
+	if err != nil {
 		log.Printf("failed to unmarshal body: %v", err)
+		http.Error(w, "failed to unmarshal body", http.StatusBadRequest)
 		return
 	}
 
 	userMsg := message.Entry[0].Messaging[0].Message.Text
 	if userMsg == "" {
 		log.Printf("empty message from user: %s", message.Entry[0].Messaging[0].Sender.ID)
+		http.Error(w, "empty message from user", http.StatusBadRequest)
 
 		return
 	}
@@ -171,6 +198,17 @@ func (fbm *FBMessenger) webhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	return
+}
+
+func validateSignature(content []byte, signature string, appSecret string) bool {
+	mac := hmac.New(sha256.New, []byte(appSecret))
+	mac.Write(content)
+	expectedMAC := hex.EncodeToString(mac.Sum(nil))
+	if len(signature) < 7 {
+		return false
+	}
+
+	return hmac.Equal([]byte(signature[7:]), []byte(expectedMAC))
 }
 
 func (fbm *FBMessenger) sendMessage(senderId, message string) error {

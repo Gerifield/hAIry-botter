@@ -45,10 +45,7 @@ func handleSomeRandomFunction(ctx context.Context, request mcp.CallToolRequest) 
 		return nil, errors.New("session id not found in context")
 	}
 	slog.Info("handling SomeRandomFunction", slog.Any("request", request), slog.String("sid", sid))
-	name, err := request.RequireString("name")
-	if err != nil {
-		return nil, err
-	}
+	name := request.GetString("name", "")
 
 	if name == "" {
 		return mcp.NewToolResultText("Hello mysterious stranger! Randomly"), nil

@@ -152,12 +152,28 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 		return "", err
 	}
 
-	logger.Info("response received", slog.String("response", resp.Text()))
-
 	// Check and handle function calls
-	msgParts := make([]genai.Part, 0)
-	if calls := resp.FunctionCalls(); len(calls) > 0 {
+	resp, err = l.resolveFunctions(ctx, sessionID, logger, ch, resp)
+	if err != nil {
+		logger.Error("failed to resolve functions", slog.String("error", err.Error()))
+
+		return "", err
+	}
+
+	err = l.saveHistory(sessionID, ch.History(false))
+
+	return resp.Text(), err
+}
+
+func (l *Logic) resolveFunctions(ctx context.Context, sessionID string, logger *slog.Logger, ch *genai.Chat, resp *genai.GenerateContentResponse) (*genai.GenerateContentResponse, error) {
+	for {
+		calls := resp.FunctionCalls()
+		if len(calls) == 0 {
+			break
+		}
+
 		logger.Info("function calls detected", slog.Int("calls", len(calls)))
+		msgParts := make([]genai.Part, 0)
 		for _, call := range calls {
 			// fmt.Println(call.ID, call.Name, call.Args)
 			logger.Info("initiating function call", slog.String("id", call.ID), slog.String("function", call.Name), slog.Any("args", call.Args))
@@ -202,18 +218,15 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 					}})
 		}
 
-		// Question: Is it possible to return a function?
-		// TODO: Resend multiple times until there is no function call left if that is possible
 		// Resend with the function output
+		var err error
 		resp, err = ch.SendMessage(ctx, msgParts...)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 	}
 
-	err = l.saveHistory(sessionID, ch.History(false))
-
-	return resp.Text(), err
+	return resp, nil
 }
 
 type saveFormat struct {

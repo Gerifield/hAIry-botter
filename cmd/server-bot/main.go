@@ -45,7 +45,14 @@ func main() {
 			s = strings.TrimSpace(s)
 
 			logger.Info("init SSE MCP server", slog.String("server", mcpServer))
-			sseTransport, err := transport.NewSSE(mcpServer)
+			sseTransport, err := transport.NewSSE(mcpServer, transport.WithHeaderFunc(func(ctx context.Context) map[string]string {
+				res := make(map[string]string)
+				if u := ctx.Value("x-session-id"); u != nil {
+					res["x-session-id"] = u.(string)
+				}
+
+				return res
+			}))
 			if err != nil {
 				logger.Error("failed to create SSE transport", slog.String("err", err.Error()))
 

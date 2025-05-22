@@ -5,7 +5,7 @@ go 1.24.3
 require (
 	github.com/briandowns/spinner v1.23.2
 	github.com/go-chi/chi/v5 v5.2.1
-	github.com/mark3labs/mcp-go v0.27.1
+	github.com/mark3labs/mcp-go v0.29.1-0.20250521213157-f99e5472f312
 	google.golang.org/genai v1.5.0
 )
 

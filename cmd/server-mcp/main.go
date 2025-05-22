@@ -14,8 +14,7 @@ func main() {
 
 	srv := server.NewMCPServer(
 		"Greeter example",
-		"0.0.1",
-	)
+		"0.0.1")
 
 	toolGreeter := mcp.NewTool("some_random_function",
 		mcp.WithDescription("This is the some_random_function which the user can call with or without a name parameter and it will do something"),
@@ -27,7 +26,11 @@ func main() {
 
 	srv.AddTool(toolGreeter, handleSomeRandomFunction)
 
-	sseSrv := server.NewSSEServer(srv, server.WithBaseURL("http://localhost:8081"))
+	sseSrv := server.NewSSEServer(srv,
+		server.WithBaseURL("http://localhost:8081"),
+		server.WithSSEContextFunc(func(ctx context.Context, r *http.Request) context.Context {
+			return context.WithValue(ctx, "x-session-id", r.Header.Get("x-session-id"))
+		}))
 	slog.Info("starting SSE server", slog.String("url", "http://localhost:8081"))
 	if err := sseSrv.Start(":8081"); err != nil {
 		if !errors.Is(err, http.ErrServerClosed) {
@@ -37,12 +40,14 @@ func main() {
 }
 
 func handleSomeRandomFunction(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	slog.Info("handling SomeRandomFunction", slog.Any("request", request))
-	name := ""
-	if nameArg, ok := request.Params.Arguments["name"]; ok {
-		if nameConverted, ok := nameArg.(string); ok {
-			name = nameConverted
-		}
+	sid, ok := ctx.Value("x-session-id").(string)
+	if !ok {
+		return nil, errors.New("session id not found in context")
+	}
+	slog.Info("handling SomeRandomFunction", slog.Any("request", request), slog.String("sid", sid))
+	name, err := request.RequireString("name")
+	if err != nil {
+		return nil, err
 	}
 
 	if name == "" {

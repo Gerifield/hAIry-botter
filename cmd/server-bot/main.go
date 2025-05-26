@@ -81,7 +81,11 @@ func main() {
 		return
 	}
 
-	hist := history.New(logger, "history-gemini/")
+	hist := history.New(logger, "history-gemini/", history.Config{
+		HistorySummary:  10,
+		Summarizer:      aiClient,
+		SummarizerModel: geminiModel,
+	})
 
 	aiLogic, err := gemini.New(logger, aiClient, geminiModel, hist, mcpClients)
 	if err != nil {

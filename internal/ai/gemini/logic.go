@@ -16,8 +16,8 @@ import (
 )
 
 type historyLogic interface {
-	Read(sessionID string) ([]*genai.Content, error)
-	Save(sessionID string, history []*genai.Content) error
+	Read(ctx context.Context, sessionID string) ([]*genai.Content, error)
+	Save(ctx context.Context, sessionID string, history []*genai.Content) error
 }
 
 // Logic .
@@ -129,7 +129,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 	logger := l.logger.With("sessionID", sessionID)
 	logger.Info("handling message", slog.String("message", msg))
 
-	hist, err := l.history.Read(sessionID)
+	hist, err := l.history.Read(ctx, sessionID)
 	if err != nil {
 		return "", err
 	}
@@ -165,7 +165,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 		return "", err
 	}
 
-	err = l.history.Save(sessionID, ch.History(false))
+	err = l.history.Save(ctx, sessionID, ch.History(false))
 
 	return resp.Text(), err
 }

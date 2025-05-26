@@ -1,3 +1,4 @@
+// TODO: we could make this AI agnostic, so get rid of the genai package dependency
 package history
 
 import (
@@ -41,7 +42,6 @@ type saveFormat struct {
 }
 
 // Read .
-// TODO: we could make this AI agnostic, so get rid of the genai package dependency
 func (l *Logic) Read(ctx context.Context, sessionID string) ([]*genai.Content, error) {
 	b, err := os.ReadFile(fmt.Sprintf("%s/%s", l.historyPath, sessionID))
 	if err != nil {

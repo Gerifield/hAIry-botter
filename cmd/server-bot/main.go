@@ -3,18 +3,20 @@ package main
 import (
 	"context"
 	"errors"
-	"github.com/mark3labs/mcp-go/client"
-	"github.com/mark3labs/mcp-go/client/transport"
-	"google.golang.org/genai"
-	"hairy-botter/internal/ai/gemini"
-	"hairy-botter/internal/history"
-	"hairy-botter/internal/server"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
 	"strings"
+
+	"github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/client/transport"
+	"google.golang.org/genai"
+
+	"hairy-botter/internal/ai/gemini"
+	"hairy-botter/internal/history"
+	"hairy-botter/internal/server"
 )
 
 func main() {

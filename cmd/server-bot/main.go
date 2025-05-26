@@ -3,21 +3,27 @@ package main
 import (
 	"context"
 	"errors"
-	"github.com/mark3labs/mcp-go/client"
-	"github.com/mark3labs/mcp-go/client/transport"
-	"google.golang.org/genai"
-	"hairy-botter/internal/ai/gemini"
-	"hairy-botter/internal/server"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
+
+	"github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/client/transport"
+	"google.golang.org/genai"
+
+	"hairy-botter/internal/ai/gemini"
+	gemini_embedding "hairy-botter/internal/ai/gemini-embedding"
+	"hairy-botter/internal/rag"
+	"hairy-botter/internal/server"
 )
 
 func main() {
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug, // TODO: set to configurable level
+	}))
 
 	addr := os.Getenv("ADDR")
 	if addr == "" {
@@ -80,7 +86,15 @@ func main() {
 		return
 	}
 
-	aiLogic, err := gemini.New(logger, aiClient, geminiModel, "history-gemini/", mcpClients)
+	ragEmbedder := gemini_embedding.GeminiEmbeddingFunc(aiClient, "text-embedding-004")
+	ragL, err := rag.New(logger, "bot-context/", ragEmbedder)
+	if err != nil {
+		logger.Error("failed to create RAG logic", slog.String("err", err.Error()))
+
+		return
+	}
+
+	aiLogic, err := gemini.New(logger, aiClient, geminiModel, "history-gemini/", mcpClients, ragL)
 	if err != nil {
 		logger.Error("failed to create gemini logic", slog.String("err", err.Error()))
 

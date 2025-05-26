@@ -7,6 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/client/transport"
 	"google.golang.org/genai"
 	"hairy-botter/internal/ai/gemini"
+	"hairy-botter/internal/history"
 	"hairy-botter/internal/server"
 	"log/slog"
 	"net/http"
@@ -80,7 +81,9 @@ func main() {
 		return
 	}
 
-	aiLogic, err := gemini.New(logger, aiClient, geminiModel, "history-gemini/", mcpClients)
+	hist := history.New(logger, "history-gemini/")
+
+	aiLogic, err := gemini.New(logger, aiClient, geminiModel, hist, mcpClients)
 	if err != nil {
 		logger.Error("failed to create gemini logic", slog.String("err", err.Error()))
 

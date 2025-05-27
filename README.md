@@ -19,11 +19,11 @@ Happy playing!
 
 - Gemini API powered AI service
 - Simple HTTP based server for the AI service
-- MCP (Multi-Call Protocol) support for external function calls (multiple servers supported, example implementation included)
+- MCP (Multi-Call Protocol) support for external function calls (multiple servers supported, example server implementation included)
 - History storing for the conversations (stored in the `history-gemini` folder per sessionID)
-- History summarization to keep the context shorter
-- RAG (Retrieval-Augmented Generation) support with Gemini API and in-memory database (put any text document into the `bot-context` folder)
-- Personality support with Gemini API (edit the `personality.json` file)
+- History summarization to keep the context shorter (optional)
+- RAG (Retrieval-Augmented Generation) support with Gemini API and in-memory database (put any text document into the `bot-context` folder and it will process them at startup)
+- "Personality" support via base prompt (edit the `personality.json` file)
 - CLI client for easy testing
 - Facebook Messenger client for integration
 - Modular design for easy extension

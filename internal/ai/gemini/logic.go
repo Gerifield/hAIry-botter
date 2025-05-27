@@ -10,19 +10,26 @@ import (
 	"os"
 	"strings"
 
+	"hairy-botter/internal/rag"
+	
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
 	"google.golang.org/genai"
 )
 
+type historyLogic interface {
+	Read(ctx context.Context, sessionID string) ([]*genai.Content, error)
+	Save(ctx context.Context, sessionID string, history []*genai.Content) error
+}
+
 // Logic .
 type Logic struct {
 	logger *slog.Logger
 
-	client      *genai.Client
-	model       string
-	historyPath string
-	persona     *genai.Content
+	client  *genai.Client
+	model   string
+	history historyLogic
+	persona *genai.Content
 
 	// MCP related fields
 	// We have multiple clients in a list
@@ -31,10 +38,13 @@ type Logic struct {
 	mcpFunctions []*genai.FunctionDeclaration
 	// map function name to client index -> Note: this prevents to reuse the same function name!!
 	mcpFunctionMap map[string]int
+
+	// RAG related fields
+	ragL *rag.Logic
 }
 
 // New .
-func New(logger *slog.Logger, client *genai.Client, model string, historyPath string, mcpClients []*client.Client) (*Logic, error) {
+func New(logger *slog.Logger, client *genai.Client, model string, history historyLogic, mcpClients []*client.Client, ragL *rag.Logic) (*Logic, error) {
 
 	persona, err := readPersonality()
 	if err != nil {
@@ -107,11 +117,12 @@ func New(logger *slog.Logger, client *genai.Client, model string, historyPath st
 		logger:         logger,
 		client:         client,
 		model:          model,
-		historyPath:    historyPath,
+		history:        history,
 		persona:        persona,
 		mcpClients:     mcpClients,
 		mcpFunctions:   functions,
 		mcpFunctionMap: fnMapping,
+		ragL:           ragL,
 	}, nil
 }
 
@@ -124,7 +135,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 	logger := l.logger.With("sessionID", sessionID)
 	logger.Info("handling message", slog.String("message", msg))
 
-	hist, err := l.readHistory(sessionID)
+	hist, err := l.history.Read(ctx, sessionID)
 	if err != nil {
 		return "", err
 	}
@@ -146,8 +157,41 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 		return "", err
 	}
 
+	// Add RAG information if available to the user prompt as context
+	promptParts := make([]genai.Part, 0)
+	if l.ragL != nil {
+		logger.Info("adding RAG context to history")
+		ragContent, err := l.ragL.Query(ctx, msg, 3) // Query with the message as context
+		if err != nil {
+			logger.Error("failed to query RAG content", slog.String("error", err.Error()))
+
+			return "", err
+		}
+
+		// Collect the results into a string slice
+		ragRes := make([]string, 0)
+		for _, res := range ragContent {
+			ragRes = append(ragRes, res.Content)
+		}
+
+		// Convert the result to a single genai.Part
+		if len(ragRes) > 0 {
+			logger.Info("RAG content found, adding to the request", slog.Int("num_results", len(ragRes)))
+
+			// Add a little context info and an additional line break
+			ragRes = append([]string{"Context from the knowledge base:"}, ragRes...)
+			ragRes = append(ragRes, "\n")
+
+			promptParts = append(promptParts, genai.Part{
+				Text: strings.Join(ragRes, "\n"),
+			})
+		}
+	}
+
 	logger.Info("sending message")
-	resp, err := ch.SendMessage(ctx, genai.Part{Text: msg})
+	parts := append(promptParts, genai.Part{Text: fmt.Sprintf("User request: %s", msg)})
+	logger.Debug("message parts sending to Gemini", slog.Any("parts", parts))
+	resp, err := ch.SendMessage(ctx, parts...)
 	if err != nil {
 		return "", err
 	}
@@ -160,7 +204,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 		return "", err
 	}
 
-	err = l.saveHistory(sessionID, ch.History(false))
+	err = l.history.Save(ctx, sessionID, ch.History(false))
 
 	return resp.Text(), err
 }
@@ -227,39 +271,6 @@ func (l *Logic) resolveFunctions(ctx context.Context, sessionID string, logger *
 	}
 
 	return resp, nil
-}
-
-type saveFormat struct {
-	History []*genai.Content `json:"history"`
-}
-
-func (l *Logic) readHistory(sessionID string) ([]*genai.Content, error) {
-	b, err := os.ReadFile(fmt.Sprintf("%s/%s", l.historyPath, sessionID))
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) { // Not yet exists, ignore
-			return make([]*genai.Content, 0), nil
-		}
-		return nil, err
-	}
-
-	var saved saveFormat
-	err = json.Unmarshal(b, &saved)
-	if err != nil {
-		return nil, err
-	}
-
-	return saved.History, nil
-}
-
-func (l *Logic) saveHistory(sessionID string, history []*genai.Content) error {
-	b, err := json.Marshal(saveFormat{
-		History: history,
-	})
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(fmt.Sprintf("%s/%s", l.historyPath, sessionID), b, 0644)
 }
 
 func readPersonality() (*genai.Content, error) {

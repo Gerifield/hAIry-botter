@@ -17,14 +17,19 @@ import (
 	"google.golang.org/genai"
 )
 
+type historyLogic interface {
+	Read(ctx context.Context, sessionID string) ([]*genai.Content, error)
+	Save(ctx context.Context, sessionID string, history []*genai.Content) error
+}
+
 // Logic .
 type Logic struct {
 	logger *slog.Logger
 
-	client      *genai.Client
-	model       string
-	historyPath string
-	persona     *genai.Content
+	client  *genai.Client
+	model   string
+	history historyLogic
+	persona *genai.Content
 
 	// MCP related fields
 	// We have multiple clients in a list
@@ -39,7 +44,7 @@ type Logic struct {
 }
 
 // New .
-func New(logger *slog.Logger, client *genai.Client, model string, historyPath string, mcpClients []*client.Client, ragL *rag.Logic) (*Logic, error) {
+func New(logger *slog.Logger, client *genai.Client, model string, history historyLogic, mcpClients []*client.Client, ragL *rag.Logic) (*Logic, error) {
 
 	persona, err := readPersonality()
 	if err != nil {
@@ -112,7 +117,7 @@ func New(logger *slog.Logger, client *genai.Client, model string, historyPath st
 		logger:         logger,
 		client:         client,
 		model:          model,
-		historyPath:    historyPath,
+		history:        history,
 		persona:        persona,
 		mcpClients:     mcpClients,
 		mcpFunctions:   functions,
@@ -130,7 +135,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 	logger := l.logger.With("sessionID", sessionID)
 	logger.Info("handling message", slog.String("message", msg))
 
-	hist, err := l.readHistory(sessionID)
+	hist, err := l.history.Read(ctx, sessionID)
 	if err != nil {
 		return "", err
 	}
@@ -199,7 +204,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 		return "", err
 	}
 
-	err = l.saveHistory(sessionID, ch.History(false))
+	err = l.history.Save(ctx, sessionID, ch.History(false))
 
 	return resp.Text(), err
 }
@@ -266,39 +271,6 @@ func (l *Logic) resolveFunctions(ctx context.Context, sessionID string, logger *
 	}
 
 	return resp, nil
-}
-
-type saveFormat struct {
-	History []*genai.Content `json:"history"`
-}
-
-func (l *Logic) readHistory(sessionID string) ([]*genai.Content, error) {
-	b, err := os.ReadFile(fmt.Sprintf("%s/%s", l.historyPath, sessionID))
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) { // Not yet exists, ignore
-			return make([]*genai.Content, 0), nil
-		}
-		return nil, err
-	}
-
-	var saved saveFormat
-	err = json.Unmarshal(b, &saved)
-	if err != nil {
-		return nil, err
-	}
-
-	return saved.History, nil
-}
-
-func (l *Logic) saveHistory(sessionID string, history []*genai.Content) error {
-	b, err := json.Marshal(saveFormat{
-		History: history,
-	})
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(fmt.Sprintf("%s/%s", l.historyPath, sessionID), b, 0644)
 }
 
 func readPersonality() (*genai.Content, error) {

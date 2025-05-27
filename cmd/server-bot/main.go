@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/client"
@@ -16,6 +17,7 @@ import (
 	"hairy-botter/internal/ai/gemini"
 	gemini_embedding "hairy-botter/internal/ai/gemini-embedding"
 	"hairy-botter/internal/rag"
+	"hairy-botter/internal/history"
 	"hairy-botter/internal/server"
 )
 
@@ -40,6 +42,18 @@ func main() {
 	geminiModel := os.Getenv("GEMINI_MODEL")
 	if geminiModel == "" {
 		geminiModel = "gemini-2.5-flash-preview-04-17" // For now
+	}
+
+	historySummaryEnv := os.Getenv("HISTORY_SUMMARY")
+	historySummary := 20 // Default to 20
+	if historySummaryEnv == "" {
+		p, err := strconv.ParseInt(historySummaryEnv, 10, 32)
+		if err != nil {
+			logger.Error("failed to parse HISTORY_SUMMARY", slog.String("err", err.Error()))
+
+			return
+		}
+		historySummary = int(p)
 	}
 
 	mcpClients := make([]*client.Client, 0)
@@ -94,7 +108,14 @@ func main() {
 		return
 	}
 
-	aiLogic, err := gemini.New(logger, aiClient, geminiModel, "history-gemini/", mcpClients, ragL)
+	hist := history.New(logger, "history-gemini/", history.Config{
+		HistorySummary:  historySummary,
+		Summarizer:      aiClient,
+		SummarizerModel: geminiModel,
+	})
+
+	aiLogic, err := gemini.New(logger, aiClient, geminiModel, hist, mcpClients, ragL)
+
 	if err != nil {
 		logger.Error("failed to create gemini logic", slog.String("err", err.Error()))
 

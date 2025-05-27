@@ -95,6 +95,7 @@ Optional env variables:
 - `GRAPHQL_URL` - GraphQL base url (Default: `https://graph.facebook.com/v22.0`)
 - `ADDR` - Server listening address (Default: `:8082`)
 - `AI_SERVICE` - AI service (the server-bot's) address (Default: `http://127.0.0.1:8080`)
+- `HISTORY_SUMMARY` - After how many messages the history should be summarized (Default: `20`, `0` means no summary, both model and user messages counts)
 
 Then you can start chatting with the bot via sending a message to the page.
 (If you configured an MCP in the AI service it will be called too.)

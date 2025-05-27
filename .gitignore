@@ -26,3 +26,5 @@ go.work.sum
 .idea/
 history-gemini/*
 !history-gemini/.gitkeep
+bot-context/*
+!bot-context/.gitkeep

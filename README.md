@@ -1,4 +1,4 @@
-# hAIry Botter
+# hAIry Botter 🪄 ✨
 
 <img src="https://github.com/user-attachments/assets/10e49300-eb17-41a3-b8c9-affd399c8810" width=250 />
 

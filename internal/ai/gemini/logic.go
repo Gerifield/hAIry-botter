@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 
+	"hairy-botter/internal/rag"
+	
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
 	"google.golang.org/genai"
@@ -36,10 +38,13 @@ type Logic struct {
 	mcpFunctions []*genai.FunctionDeclaration
 	// map function name to client index -> Note: this prevents to reuse the same function name!!
 	mcpFunctionMap map[string]int
+
+	// RAG related fields
+	ragL *rag.Logic
 }
 
 // New .
-func New(logger *slog.Logger, client *genai.Client, model string, history historyLogic, mcpClients []*client.Client) (*Logic, error) {
+func New(logger *slog.Logger, client *genai.Client, model string, history historyLogic, mcpClients []*client.Client, ragL *rag.Logic) (*Logic, error) {
 
 	persona, err := readPersonality()
 	if err != nil {
@@ -117,6 +122,7 @@ func New(logger *slog.Logger, client *genai.Client, model string, history histor
 		mcpClients:     mcpClients,
 		mcpFunctions:   functions,
 		mcpFunctionMap: fnMapping,
+		ragL:           ragL,
 	}, nil
 }
 
@@ -151,8 +157,41 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 		return "", err
 	}
 
+	// Add RAG information if available to the user prompt as context
+	promptParts := make([]genai.Part, 0)
+	if l.ragL != nil {
+		logger.Info("adding RAG context to history")
+		ragContent, err := l.ragL.Query(ctx, msg, 3) // Query with the message as context
+		if err != nil {
+			logger.Error("failed to query RAG content", slog.String("error", err.Error()))
+
+			return "", err
+		}
+
+		// Collect the results into a string slice
+		ragRes := make([]string, 0)
+		for _, res := range ragContent {
+			ragRes = append(ragRes, res.Content)
+		}
+
+		// Convert the result to a single genai.Part
+		if len(ragRes) > 0 {
+			logger.Info("RAG content found, adding to the request", slog.Int("num_results", len(ragRes)))
+
+			// Add a little context info and an additional line break
+			ragRes = append([]string{"Context from the knowledge base:"}, ragRes...)
+			ragRes = append(ragRes, "\n")
+
+			promptParts = append(promptParts, genai.Part{
+				Text: strings.Join(ragRes, "\n"),
+			})
+		}
+	}
+
 	logger.Info("sending message")
-	resp, err := ch.SendMessage(ctx, genai.Part{Text: msg})
+	parts := append(promptParts, genai.Part{Text: fmt.Sprintf("User request: %s", msg)})
+	logger.Debug("message parts sending to Gemini", slog.Any("parts", parts))
+	resp, err := ch.SendMessage(ctx, parts...)
 	if err != nil {
 		return "", err
 	}

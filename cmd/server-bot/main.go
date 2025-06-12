@@ -16,8 +16,8 @@ import (
 
 	"hairy-botter/internal/ai/gemini"
 	gemini_embedding "hairy-botter/internal/ai/gemini-embedding"
-	"hairy-botter/internal/rag"
 	"hairy-botter/internal/history"
+	"hairy-botter/internal/rag"
 	"hairy-botter/internal/server"
 )
 
@@ -46,7 +46,7 @@ func main() {
 
 	historySummaryEnv := os.Getenv("HISTORY_SUMMARY")
 	historySummary := 20 // Default to 20
-	if historySummaryEnv == "" {
+	if historySummaryEnv != "" {
 		p, err := strconv.ParseInt(historySummaryEnv, 10, 32)
 		if err != nil {
 			logger.Error("failed to parse HISTORY_SUMMARY", slog.String("err", err.Error()))

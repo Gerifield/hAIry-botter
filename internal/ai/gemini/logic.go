@@ -125,6 +125,7 @@ func New(logger *slog.Logger, client *genai.Client, model string, history histor
 		mcpFunctions:   functions,
 		mcpFunctionMap: fnMapping,
 		ragL:           ragL,
+		searchEnable:   searchEnable,
 	}, nil
 }
 

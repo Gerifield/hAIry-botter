@@ -89,13 +89,15 @@ func main() {
 		}
 	}
 
-	searchEnable := os.Getenv("SEARCH_ENABLE")
-	if searchEnable == "true" || searchEnable == "1" {
+	var searchEnable bool
+	searchEnabled := os.Getenv("SEARCH_ENABLE")
+	if searchEnabled == "true" || searchEnabled == "1" {
 		if len(mcpClients) != 0 {
 			logger.Error("MCP clients are not supported with search enabled, please remove MCP_SSE_SERVERS environment variable")
 
 			return
 		}
+		searchEnable = true
 	}
 
 	// Initialize the AI logic

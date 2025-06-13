@@ -89,6 +89,15 @@ func main() {
 		}
 	}
 
+	searchEnable := os.Getenv("SEARCH_ENABLE")
+	if searchEnable == "true" || searchEnable == "1" {
+		if len(mcpClients) != 0 {
+			logger.Error("MCP clients are not supported with search enabled, please remove MCP_SSE_SERVERS environment variable")
+
+			return
+		}
+	}
+
 	// Initialize the AI logic
 	aiClient, err := genai.NewClient(context.Background(), &genai.ClientConfig{
 		APIKey:  geminiKey,
@@ -114,7 +123,7 @@ func main() {
 		SummarizerModel: geminiModel,
 	})
 
-	aiLogic, err := gemini.New(logger, aiClient, geminiModel, hist, mcpClients, ragL)
+	aiLogic, err := gemini.New(logger, aiClient, geminiModel, hist, mcpClients, ragL, searchEnable)
 
 	if err != nil {
 		logger.Error("failed to create gemini logic", slog.String("err", err.Error()))

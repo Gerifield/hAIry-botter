@@ -12,7 +12,7 @@ import (
 	"google.golang.org/genai"
 )
 
-var summarySystemPrompt = &genai.Content{Role: "model", Parts: []*genai.Part{{Text: "You are a summarization AI. Your task is to summarize the conversation history into a single message. Extract all the most important information related to the client like name, phone number and other parameters. It is possible that the model response contains user related information. Only respond with the summarization and keep it short just keep the most important information."}}}
+var summarySystemPrompt = &genai.Content{Role: "user", Parts: []*genai.Part{{Text: "You are a summarization AI. Your task is to summarize the conversation history into a single message. Extract all the most important information related to the client like name, phone number and other parameters. It is possible that the model response contains user related information. Only respond with the summarization and keep it short just keep the most important information."}}}
 var summeryUserTemplate = "The current history which should be summarized is:\n\n%s"
 
 type Config struct {

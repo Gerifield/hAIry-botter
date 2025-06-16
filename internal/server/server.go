@@ -34,6 +34,15 @@ func New(addr string, aiLogic ai) *Server {
 
 func (s *Server) addRoutes() {
 	s.h.Post("/message", s.postMessage)
+
+	// CORS preflight request handler
+	// TODO: make configurable
+	s.h.Options("/*", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-User-ID")
+		w.WriteHeader(http.StatusOK)
+	})
 }
 
 // Start .

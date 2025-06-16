@@ -10,11 +10,11 @@ import (
 	"os"
 	"strings"
 
-	"hairy-botter/internal/rag"
-	
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
 	"google.golang.org/genai"
+
+	"hairy-botter/internal/rag"
 )
 
 type historyLogic interface {
@@ -41,10 +41,12 @@ type Logic struct {
 
 	// RAG related fields
 	ragL *rag.Logic
+
+	searchEnable bool
 }
 
 // New .
-func New(logger *slog.Logger, client *genai.Client, model string, history historyLogic, mcpClients []*client.Client, ragL *rag.Logic) (*Logic, error) {
+func New(logger *slog.Logger, client *genai.Client, model string, history historyLogic, mcpClients []*client.Client, ragL *rag.Logic, searchEnable bool) (*Logic, error) {
 
 	persona, err := readPersonality()
 	if err != nil {
@@ -123,6 +125,7 @@ func New(logger *slog.Logger, client *genai.Client, model string, history histor
 		mcpFunctions:   functions,
 		mcpFunctionMap: fnMapping,
 		ragL:           ragL,
+		searchEnable:   searchEnable,
 	}, nil
 }
 
@@ -149,9 +152,13 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 		createConfig.Tools = []*genai.Tool{
 			{FunctionDeclarations: l.mcpFunctions},
 		}
+	} else if l.searchEnable {
+		createConfig.Tools = []*genai.Tool{
+			{GoogleSearch: &genai.GoogleSearch{}},
+		}
 	}
 
-	logger.Info("creating chat content")
+	logger.Info("creating chat content", slog.Bool("searchEnabled", l.searchEnable), slog.Int("mcpClientsCount", len(l.mcpClients)))
 	ch, err := l.client.Chats.Create(ctx, l.model, createConfig, hist)
 	if err != nil {
 		return "", err

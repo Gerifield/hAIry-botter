@@ -239,7 +239,7 @@ func (wm *WhatsappMessenger) sendMessage(senderNumber, message string) error {
 	}
 
 	// setup http request
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/%s/messages", wm.baseURL, wm.phoneID, wm.accessToken), bytes.NewBuffer(data))
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/%s/messages", wm.baseURL, wm.phoneID), bytes.NewBuffer(data))
 	if err != nil {
 		return fmt.Errorf("failed wrap request: %w", err)
 	}

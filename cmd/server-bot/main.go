@@ -57,15 +57,15 @@ func main() {
 	}
 
 	mcpClients := make([]*client.Client, 0)
-	mcpServer := os.Getenv("MCP_SSE_SERVERS")
+	mcpServer := os.Getenv("MCP_SERVERS")
 	if mcpServer != "" {
 		// Parse the MCP server list
 		servers := strings.Split(mcpServer, ",")
 		for _, s := range servers {
 			s = strings.TrimSpace(s)
 
-			logger.Info("init SSE MCP server", slog.String("server", mcpServer))
-			sseTransport, err := transport.NewSSE(mcpServer, transport.WithHeaderFunc(func(ctx context.Context) map[string]string {
+			logger.Info("init Streamable HTTP MCP server", slog.String("server", mcpServer))
+			streamableTransport, err := transport.NewStreamableHTTP(mcpServer, transport.WithHTTPHeaderFunc(func(ctx context.Context) map[string]string {
 				res := make(map[string]string)
 				if u := ctx.Value("x-session-id"); u != nil {
 					res["x-session-id"] = u.(string)
@@ -74,18 +74,18 @@ func main() {
 				return res
 			}))
 			if err != nil {
-				logger.Error("failed to create SSE transport", slog.String("err", err.Error()))
+				logger.Error("failed to create Streamable HTTP transport", slog.String("err", err.Error()))
 
 				return
 			}
 
-			if err = sseTransport.Start(context.Background()); err != nil {
-				logger.Error("failed to start SSE transport", slog.String("err", err.Error()))
+			if err = streamableTransport.Start(context.Background()); err != nil {
+				logger.Error("failed to start Streamable HTTP transport", slog.String("err", err.Error()))
 
 				return
 			}
 
-			mcpClients = append(mcpClients, client.NewClient(sseTransport))
+			mcpClients = append(mcpClients, client.NewClient(streamableTransport))
 		}
 	}
 
@@ -93,7 +93,7 @@ func main() {
 	searchEnabled := os.Getenv("SEARCH_ENABLE")
 	if searchEnabled == "true" || searchEnabled == "1" {
 		if len(mcpClients) != 0 {
-			logger.Error("MCP clients are not supported with search enabled, please remove MCP_SSE_SERVERS environment variable")
+			logger.Error("MCP clients are not supported with search enabled, please remove MCP_SERVERS environment variable")
 
 			return
 		}

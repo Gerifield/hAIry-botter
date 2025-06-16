@@ -26,13 +26,12 @@ func main() {
 
 	srv.AddTool(toolGreeter, handleSomeRandomFunction)
 
-	sseSrv := server.NewSSEServer(srv,
-		server.WithBaseURL("http://localhost:8081"),
-		server.WithSSEContextFunc(func(ctx context.Context, r *http.Request) context.Context {
+	streamableSrv := server.NewStreamableHTTPServer(srv,
+		server.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
 			return context.WithValue(ctx, "x-session-id", r.Header.Get("x-session-id"))
 		}))
-	slog.Info("starting SSE server", slog.String("url", "http://localhost:8081"))
-	if err := sseSrv.Start(":8081"); err != nil {
+	slog.Info("starting Streamable HTTP server", slog.String("url", "http://localhost:8081/mcp"))
+	if err := streamableSrv.Start(":8081"); err != nil {
 		if !errors.Is(err, http.ErrServerClosed) {
 			slog.Error(err.Error())
 		}

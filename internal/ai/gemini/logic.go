@@ -143,8 +143,12 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 		return "", err
 	}
 
+	zeroBudget := int32(0)
 	createConfig := &genai.GenerateContentConfig{
 		SystemInstruction: l.persona,
+		ThinkingConfig: &genai.ThinkingConfig{
+			ThinkingBudget: &zeroBudget,
+		},
 	}
 
 	// Add MCP tools if available

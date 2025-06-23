@@ -170,6 +170,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 
 	// Add RAG information if available to the user prompt as context
 	promptParts := make([]genai.Part, 0)
+	userMessagePrefix := ""
 	if l.ragL != nil {
 		logger.Info("adding RAG context to history")
 		ragContent, err := l.ragL.Query(ctx, msg, 3) // Query with the message as context
@@ -196,11 +197,13 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 			promptParts = append(promptParts, genai.Part{
 				Text: strings.Join(ragRes, "\n"),
 			})
+
+			userMessagePrefix = "User request: "
 		}
 	}
 
 	logger.Info("sending message")
-	parts := append(promptParts, genai.Part{Text: fmt.Sprintf("User request: %s", msg)})
+	parts := append(promptParts, genai.Part{Text: fmt.Sprintf("%s%s", userMessagePrefix, msg)})
 	logger.Debug("message parts sending to Gemini", slog.Any("parts", parts))
 	resp, err := ch.SendMessage(ctx, parts...)
 	if err != nil {

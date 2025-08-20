@@ -41,7 +41,7 @@ func main() {
 
 	geminiModel := os.Getenv("GEMINI_MODEL")
 	if geminiModel == "" {
-		geminiModel = "gemini-2.5-flash-preview-04-17" // For now
+		geminiModel = "gemini-2.5-flash" // For now
 	}
 
 	historySummaryEnv := os.Getenv("HISTORY_SUMMARY")

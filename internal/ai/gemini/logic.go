@@ -14,6 +14,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"google.golang.org/genai"
 
+	"hairy-botter/internal/ai/domain"
 	"hairy-botter/internal/rag"
 )
 
@@ -131,12 +132,12 @@ func New(logger *slog.Logger, client *genai.Client, model string, history histor
 
 // HandleMessage as an internal logic
 // sessionID is unique to be able to get the history
-func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string) (string, error) {
+func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.Request) (string, error) {
 	if sessionID == "" {
 		return "", errors.New("sessionID is empty")
 	}
 	logger := l.logger.With("sessionID", sessionID)
-	logger.Info("handling message", slog.String("message", msg))
+	logger.Info("handling message", slog.String("message", req.Message))
 
 	hist, err := l.history.Read(ctx, sessionID)
 	if err != nil {
@@ -173,7 +174,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 	userMessagePrefix := ""
 	if l.ragL != nil {
 		logger.Info("adding RAG context to history")
-		ragContent, err := l.ragL.Query(ctx, msg, 3) // Query with the message as context
+		ragContent, err := l.ragL.Query(ctx, req.Message, 3) // Query with the message as context
 		if err != nil {
 			logger.Error("failed to query RAG content", slog.String("error", err.Error()))
 
@@ -203,9 +204,12 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, msg string)
 	}
 
 	logger.Info("sending message")
-	parts := append(promptParts, genai.Part{Text: fmt.Sprintf("%s%s", userMessagePrefix, msg)})
-	logger.Debug("message parts sending to Gemini", slog.Any("parts", parts))
-	resp, err := ch.SendMessage(ctx, parts...)
+	promptParts = append(promptParts, genai.Part{Text: fmt.Sprintf("%s%s", userMessagePrefix, req.Message)})
+	if req.InlineData != nil {
+		promptParts = append(promptParts, *genai.NewPartFromBytes(req.InlineData.Data, req.InlineData.MimeType))
+	}
+	logger.Debug("message parts sending to Gemini", slog.Any("parts", promptParts))
+	resp, err := ch.SendMessage(ctx, promptParts...)
 	if err != nil {
 		return "", err
 	}

@@ -27,7 +27,7 @@ Happy playing!
 - CLI client for easy testing
 - Facebook Messenger client for integration
 - Modular design for easy extension
-- Image input handling
+- Image/PDF input payload handling
 
 ## Usage
 
@@ -72,7 +72,7 @@ curl -v -X POST -H "Cookie: sessionID=MGVQOSOZWPMKWAJBQN5KWFR3DF" http://127.0.0
 
 Send image along with the question (works with PDF too):
 ```
-curl -X POST -v -F "message=What is on this image?" -F "image=@local_image.jpg" http://127.0.0.1:8080/message
+curl -X POST -v -F "message=What is on this image?" -F "payload=@local_image.jpg" http://127.0.0.1:8080/message
 ```
 
 ### Example call without unique user id:

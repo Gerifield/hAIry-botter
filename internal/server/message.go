@@ -18,16 +18,16 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
 	msg := r.PostFormValue("message")
 	userID := r.Header.Get("X-User-ID") // Optionally pass userID in header
 
-	var img *domain.Image
-	imgReader, imgHeader, err := r.FormFile("image")
+	var inlineData *domain.InlineData
+	binReader, binHeader, err := r.FormFile("payload")
 	if err == nil {
-		data := make([]byte, imgHeader.Size)
-		if _, err := imgReader.Read(data); err != nil {
-			http.Error(w, "failed to read image data", http.StatusInternalServerError)
+		data := make([]byte, binHeader.Size)
+		if _, err := binReader.Read(data); err != nil {
+			http.Error(w, "failed to read binary data", http.StatusInternalServerError)
 			return
 		}
-		img = &domain.Image{
-			MimeType: imgHeader.Header.Get("Content-Type"),
+		inlineData = &domain.InlineData{
+			MimeType: binHeader.Header.Get("Content-Type"),
 			Data:     data,
 		}
 	}
@@ -47,8 +47,8 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res, err := s.logic.HandleMessage(r.Context(), userID, domain.Request{
-		Message: msg,
-		Image:   img,
+		Message:    msg,
+		InlineData: inlineData,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

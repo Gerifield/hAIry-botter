@@ -1,10 +1,10 @@
 package domain
 
 type Request struct {
-	Message string
-	Image   *Image
+	Message    string
+	InlineData *InlineData
 }
-type Image struct {
+type InlineData struct {
 	MimeType string
 	Data     []byte
 }

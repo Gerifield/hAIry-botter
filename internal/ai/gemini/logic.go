@@ -205,8 +205,8 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 
 	logger.Info("sending message")
 	promptParts = append(promptParts, genai.Part{Text: fmt.Sprintf("%s%s", userMessagePrefix, req.Message)})
-	if req.Image != nil {
-		promptParts = append(promptParts, *genai.NewPartFromBytes(req.Image.Data, req.Image.MimeType))
+	if req.InlineData != nil {
+		promptParts = append(promptParts, *genai.NewPartFromBytes(req.InlineData.Data, req.InlineData.MimeType))
 	}
 	logger.Debug("message parts sending to Gemini", slog.Any("parts", promptParts))
 	resp, err := ch.SendMessage(ctx, promptParts...)

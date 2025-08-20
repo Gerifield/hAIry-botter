@@ -3,13 +3,14 @@ package server
 
 import (
 	"context"
+	"hairy-botter/internal/ai/domain"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 )
 
 type ai interface {
-	HandleMessage(ctx context.Context, userID string, msg string) (string, error)
+	HandleMessage(ctx context.Context, userID string, req domain.Request) (string, error)
 }
 
 // Server .

@@ -8,3 +8,22 @@ services:
       target: production
     env_file:
       - .env
+    ports:
+      - "8080:8080"
+    volumes:
+      - bot-data:/app
+
+  client-telegram:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile-client-telegram
+      target: production
+    environment:
+      AI_SERVICE: http://bot:8080
+    env_file:
+      - .env
+    depends_on:
+      - bot
+
+volumes:
+  bot-data:

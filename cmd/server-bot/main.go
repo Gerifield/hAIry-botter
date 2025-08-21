@@ -24,7 +24,8 @@ import (
 func main() {
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug, // TODO: set to configurable level
+		// Level: slog.LevelDebug, // TODO: set to configurable level
+		Level: slog.LevelInfo,
 	}))
 
 	addr := os.Getenv("ADDR")

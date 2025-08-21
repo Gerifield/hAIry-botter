@@ -7,7 +7,7 @@ RUN go mod download
 RUN CGO_ENABLED=0 go build -o /go/bin/server-bot -ldflags '-w -s' cmd/server-bot/main.go
 
 
-FROM gcr.io/distroless/static as production
+FROM gcr.io/distroless/static AS production
 WORKDIR /app
 COPY --from=build /go/bin/server-bot server-bot
 COPY --from=build /go/src/app/history-gemini history-gemini

@@ -105,8 +105,9 @@ func (l *Logic) Handler(ctx context.Context, b *bot.Bot, update *models.Update) 
 
 	fmt.Println("AI service response:", res)
 	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: update.Message.Chat.ID,
-		Text:   res,
+		ParseMode: models.ParseModeMarkdown,
+		ChatID:    update.Message.Chat.ID,
+		Text:      bot.EscapeMarkdownUnescaped(res),
 	})
 	if err != nil {
 		fmt.Println("error sending response back to Telegram:", err)

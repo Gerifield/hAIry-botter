@@ -204,7 +204,10 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 	}
 
 	logger.Info("sending message")
-	promptParts = append(promptParts, genai.Part{Text: fmt.Sprintf("%s%s", userMessagePrefix, req.Message)})
+	text := fmt.Sprintf("%s%s", userMessagePrefix, req.Message)
+	if text != "" {
+		promptParts = append(promptParts, genai.Part{Text: text})
+	}
 	if req.InlineData != nil {
 		promptParts = append(promptParts, *genai.NewPartFromBytes(req.InlineData.Data, req.InlineData.MimeType))
 	}

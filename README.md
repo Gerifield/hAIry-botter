@@ -38,9 +38,10 @@ Required env variable(s):
 
 Optional env variable(s):
 - `ADDR` - Listen address for the server (Default: `:8080`)
-- `GEMINI_MODEL` - Model to use (Default: `gemini-2.5-flash-preview-04-17`)
+- `GEMINI_MODEL` - Model to use (Default: `gemini-2.5-flash`)
 - `MCP_SERVERS` - MCP HTTP stream server for external function calls (Eg.: `http://localhost:8081/sse`), this could be a comma separated list for multiple servers
 - `SEARCH_ENABLE` - Allow to use Google search for the AI service (Default: `false`, it won't work together with MCP servers)
+- `HISTORY_SUMMARY` - After how many messages the history should be summarized (Default: `20`, `0` means no summary, both model and user messages counts)
 
 All the history will be stored under the `history-gemini` folder.
 
@@ -81,6 +82,14 @@ If you have a user id, you can use it in the call.
 
 ```
 curl -v -H "X-User-ID: someuserid1" -X POST http://127.0.0.1:8080/message -d "message=Hi there"
+```
+
+### Use docker
+
+There is a provided docker compose file.
+First make a copy of the `.env.example` file and rename it to `.env` and set your Gemini api key, then you can run the following command to start the server:
+```
+docker-compose up
 ```
 
 
@@ -132,7 +141,6 @@ Optional env variables:
 - `GRAPHQL_URL` - GraphQL base url (Default: `https://graph.facebook.com/v22.0`)
 - `ADDR` - Server listening address (Default: `:8082`)
 - `AI_SERVICE` - AI service (the server-bot's) address (Default: `http://127.0.0.1:8080`)
-- `HISTORY_SUMMARY` - After how many messages the history should be summarized (Default: `20`, `0` means no summary, both model and user messages counts)
 
 Then you can start chatting with the bot via sending a message to the page.
 (If you configured an MCP in the AI service it will be called too.)

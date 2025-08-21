@@ -1,0 +1,10 @@
+# docker-compose.yml
+version: '3.4'
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile-bot
+      target: production
+    env_file:
+      - .env

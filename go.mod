@@ -5,7 +5,9 @@ go 1.24.3
 require (
 	github.com/briandowns/spinner v1.23.2
 	github.com/go-chi/chi/v5 v5.2.1
+	github.com/go-telegram/bot v1.17.0
 	github.com/mark3labs/mcp-go v0.29.1-0.20250521213157-f99e5472f312
+	github.com/philippgille/chromem-go v0.7.0
 	google.golang.org/genai v1.5.0
 )
 
@@ -22,7 +24,6 @@ require (
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/mattn/go-colorable v0.1.2 // indirect
 	github.com/mattn/go-isatty v0.0.8 // indirect
-	github.com/philippgille/chromem-go v0.7.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.opencensus.io v0.24.0 // indirect

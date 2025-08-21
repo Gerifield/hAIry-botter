@@ -101,6 +101,23 @@ Feel free to use the generated binary in the release as well.
 
 ![cli-client](examples/client-cli-demo.svg)
 
+#### Telegram client
+
+To use this you only need to create a new Bot in Telegram and get the token.
+
+Then you can run the server with the following way:
+```
+BOT_TOKEN=<generated_token> go run cmd/client-telegram/main.go
+```
+
+You can set the AI service base url with the `AI_SERVICE` env variable.
+
+If you add a caption to an image it will be used as the question.
+
+Env variables:
+- `BOT_TOKEN` - The token of the bot you created in Telegram
+- `AI_SERVICE` - AI service (the server-bot's) address (Default: `http://127.0.0.1:8080`)
+
 
 #### Facebook messenger client
 

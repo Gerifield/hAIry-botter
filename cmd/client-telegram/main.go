@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -29,7 +30,14 @@ func main() {
 		aiSrv = "http://127.0.0.1:8080"
 	}
 
-	l := New(aiSrv)
+	usernameLimits := make([]string, 0)
+	if usernameLimitsEnv := os.Getenv("USERNAME_LIMITS"); usernameLimitsEnv != "" {
+		for _, u := range strings.Split(usernameLimitsEnv, ",") {
+			usernameLimits = append(usernameLimits, strings.TrimSpace(u))
+		}
+	}
+
+	l := New(aiSrv, usernameLimits)
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
@@ -49,17 +57,39 @@ func main() {
 }
 
 type Logic struct {
-	httpB *httpBotter.Logic
+	httpB      *httpBotter.Logic
+	userLimits []string
 }
 
-func New(baseURL string) *Logic {
+func New(baseURL string, userLimit []string) *Logic {
 	return &Logic{
-		httpB: httpBotter.New(baseURL),
+		httpB:      httpBotter.New(baseURL),
+		userLimits: userLimit,
 	}
 }
 
 // Handler .
 func (l *Logic) Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
+	// If we have any limits set, check them
+	if len(l.userLimits) > 0 {
+		found := false
+		for _, u := range l.userLimits {
+			if update.Message.From.Username == u {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: update.Message.Chat.ID,
+				Text:   "🙅You are not allowed to use this bot.",
+			})
+
+			return
+		}
+	}
+
 	var payload []byte
 	msg := update.Message.Text
 

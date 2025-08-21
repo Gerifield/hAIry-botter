@@ -1,0 +1,16 @@
+FROM golang:1.25 AS build
+
+WORKDIR /go/src/app
+COPY . .
+
+RUN go mod download
+RUN CGO_ENABLED=0 go build -o /go/bin/server-bot -ldflags '-w -s' cmd/server-bot/main.go
+
+
+FROM gcr.io/distroless/static as production
+WORKDIR /app
+COPY --from=build /go/bin/server-bot server-bot
+COPY --from=build /go/src/app/history-gemini history-gemini
+COPY --from=build /go/src/app/bot-context bot-context
+COPY --from=build /go/src/app/personality.json personality.json
+ENTRYPOINT ["./server-bot"]

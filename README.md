@@ -126,6 +126,7 @@ If you add a caption to an image it will be used as the question.
 Env variables:
 - `BOT_TOKEN` - The token of the bot you created in Telegram
 - `AI_SERVICE` - AI service (the server-bot's) address (Default: `http://127.0.0.1:8080`)
+- `USERNAME_LIMITS` - A comma separated list of usernames that are allowed to use the bot (Default: `""`, means everybody can use it)
 
 
 #### Facebook messenger client

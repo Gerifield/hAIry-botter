@@ -42,6 +42,7 @@ Optional env variable(s):
 - `MCP_SERVERS` - MCP HTTP stream server for external function calls (Eg.: `http://localhost:8081/sse`), this could be a comma separated list for multiple servers
 - `SEARCH_ENABLE` - Allow to use Google search for the AI service (Default: `false`, it won't work together with MCP servers)
 - `HISTORY_SUMMARY` - After how many messages the history should be summarized (Default: `20`, `0` means no summary, both model and user messages counts)
+- `LOG_LEVEL` - Log level (Default: `info`, other options: `debug`, `error`, `warn`/`warning`)
 
 All the history will be stored under the `history-gemini` folder.
 

@@ -21,11 +21,26 @@ import (
 	"hairy-botter/internal/server"
 )
 
+func logLevelEnv() slog.Level {
+	levelStr := os.Getenv("LOG_LEVEL")
+	switch strings.ToLower(levelStr) {
+	case "debug":
+		return slog.LevelDebug
+	case "info":
+		return slog.LevelInfo
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
+}
+
 func main() {
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		// Level: slog.LevelDebug, // TODO: set to configurable level
-		Level: slog.LevelInfo,
+		Level: logLevelEnv(),
 	}))
 
 	addr := os.Getenv("ADDR")

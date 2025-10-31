@@ -96,7 +96,7 @@ func New(logger *slog.Logger, client *genai.Client, model string, history histor
 					// Conversion for schema
 					b, _ := t.InputSchema.MarshalJSON()
 					convSchema := &genai.Schema{}
-					schemaErr := convSchema.UnmarshalJSON(b)
+					schemaErr := json.Unmarshal(b, convSchema)
 					if schemaErr != nil {
 						slog.Error("Failed to unmarshal parameter schema", "error", schemaErr)
 

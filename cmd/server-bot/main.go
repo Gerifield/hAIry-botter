@@ -127,7 +127,7 @@ func main() {
 		return
 	}
 
-	ragEmbedder := gemini_embedding.GeminiEmbeddingFunc(aiClient, "text-embedding-004")
+	ragEmbedder := gemini_embedding.GeminiEmbeddingFunc(aiClient, "gemini-embedding-001")
 	ragL, err := rag.New(logger, "bot-context/", ragEmbedder)
 	if err != nil {
 		logger.Error("failed to create RAG logic", slog.String("err", err.Error()))
@@ -152,20 +152,26 @@ func main() {
 
 	stopCh := make(chan os.Signal, 1)
 	signal.Notify(stopCh, os.Interrupt, os.Kill)
+	finishedCh := make(chan struct{}) // Signal the end of the graceful shutdown
 	go func() {
 		<-stopCh
+		logger.Info("shutting down server")
 		err := srv.Stop(context.Background())
 		if err != nil {
 			logger.Error("failed to stop server", slog.String("err", err.Error()))
 		}
+
+		logger.Info("flushing RAG database")
 		err = ragL.Close()
 		if err != nil {
 			logger.Error("failed to persist the database", slog.String("err", err.Error()))
 		}
+		close(finishedCh)
 	}()
 
 	logger.Info("starting server", slog.String("addr", addr))
 	if err := srv.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("server failed", slog.String("err", err.Error()))
 	}
+	<-finishedCh
 }

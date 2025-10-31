@@ -8,7 +8,7 @@ require (
 	github.com/go-telegram/bot v1.17.0
 	github.com/mark3labs/mcp-go v0.29.1-0.20250521213157-f99e5472f312
 	github.com/philippgille/chromem-go v0.7.0
-	google.golang.org/genai v1.5.0
+	google.golang.org/genai v1.33.0
 )
 
 require (

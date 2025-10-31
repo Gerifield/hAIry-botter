@@ -25,14 +25,16 @@ type Logic struct {
 
 	db           *chromem.DB // Database for RAG content
 	embeddedDocs int
+	embedFn      chromem.EmbeddingFunc
 }
 
 // New .
 func New(logger *slog.Logger, ragPath string, embedder chromem.EmbeddingFunc) (*Logic, error) {
+	logger.Info("try to load RAG db")
 	db, err := loadSavedDB(ragPath)
 	if err != nil {
-		// Doesn't exists or failed, recreate it
-		logger.Info("init new db")
+		// Doesn't exist or failed, recreate it
+		logger.Info("init new RAG db")
 		db = chromem.NewDB()
 		_, err := db.CreateCollection(collectionKey, nil, embedder) // Just to make sure the collection exists
 		if err != nil {
@@ -46,7 +48,8 @@ func New(logger *slog.Logger, ragPath string, embedder chromem.EmbeddingFunc) (*
 		logger:  logger,
 		ragPath: ragPath,
 
-		db: db,
+		db:      db,
+		embedFn: embedder,
 	}
 
 	return l, l.loadContent()
@@ -70,24 +73,24 @@ func (l *Logic) loadContent() error {
 	l.logger.Info("started loading rag content", slog.String("path", l.ragPath))
 	dir := os.DirFS(l.ragPath)
 
-	coll := l.db.GetCollection(collectionKey, nil) // we can leave the embeddingFunc since it was already set during creation
+	// we need to set embed function since we might have loaded an existing db
+	coll := l.db.GetCollection(collectionKey, l.embedFn)
 
 	ctx := context.Background()
 	id := 1
-	err := fs.WalkDir(dir, ".", func(path string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(dir, ".", func(fName string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return fmt.Errorf("failed to walk dir %s%s: %w", dir, path, err)
+			return fmt.Errorf("failed to walk dir %s%s: %w", dir, fName, err)
 		}
-		if d.IsDir() || d.Name() == ".gitkeep" || strings.HasSuffix(path, ".loaded") || d.Name() == dbSaveName {
+		if d.IsDir() || d.Name() == ".gitkeep" || strings.HasSuffix(fName, ".loaded") || d.Name() == dbSaveName {
 			return nil // skip directories, .gitkeep, loaded files and the db file itself
 		}
 
-		l.logger.Info("loading rag content", slog.String("path", path))
+		l.logger.Info("loading rag content", slog.String("file", fName))
 
-		fmt.Println(path)
-		f, err := dir.Open(path)
+		f, err := dir.Open(fName)
 		if err != nil {
-			l.logger.Error("failed to open rag content file", slog.String("path", path), slog.String("error", err.Error()))
+			l.logger.Error("failed to open rag content file", slog.String("file", fName), slog.String("error", err.Error()))
 
 			return err
 		}
@@ -95,7 +98,7 @@ func (l *Logic) loadContent() error {
 
 		b, err := io.ReadAll(f)
 		if err != nil {
-			l.logger.Error("failed to read rag content file", slog.String("path", path), slog.String("error", err.Error()))
+			l.logger.Error("failed to read rag content file", slog.String("file", fName), slog.String("error", err.Error()))
 
 			return err
 		}
@@ -107,7 +110,8 @@ func (l *Logic) loadContent() error {
 			return err
 		}
 
-		err = os.Rename(path, path+".loaded")
+		fullPath := path.Join(l.ragPath, fName)
+		err = os.Rename(fullPath, fullPath+".loaded")
 		if err != nil {
 			return err
 		}

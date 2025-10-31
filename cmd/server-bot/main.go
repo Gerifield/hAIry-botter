@@ -158,6 +158,10 @@ func main() {
 		if err != nil {
 			logger.Error("failed to stop server", slog.String("err", err.Error()))
 		}
+		err = ragL.Close()
+		if err != nil {
+			logger.Error("failed to persist the database", slog.String("err", err.Error()))
+		}
 	}()
 
 	logger.Info("starting server", slog.String("addr", addr))

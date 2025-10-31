@@ -7,11 +7,16 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"path"
+	"strings"
 
 	"github.com/philippgille/chromem-go"
 )
 
-const collectionKey = "rag-content"
+const (
+	collectionKey = "rag-content"
+	dbSaveName    = "database.db"
+)
 
 // Logic .
 type Logic struct {
@@ -24,14 +29,17 @@ type Logic struct {
 
 // New .
 func New(logger *slog.Logger, ragPath string, embedder chromem.EmbeddingFunc) (*Logic, error) {
-
-	// TODO: we could add an export/import to persist the db
-	db := chromem.NewDB()
-	_, err := db.CreateCollection(collectionKey, nil, embedder) // Just to make sure the collection exists
+	db, err := loadSavedDB(ragPath)
 	if err != nil {
-		logger.Error("failed to create RAG collection", slog.String("collection", collectionKey), slog.String("error", err.Error()))
+		// Doesn't exists or failed, recreate it
+		logger.Info("init new db")
+		db = chromem.NewDB()
+		_, err := db.CreateCollection(collectionKey, nil, embedder) // Just to make sure the collection exists
+		if err != nil {
+			logger.Error("failed to create RAG collection", slog.String("collection", collectionKey), slog.String("error", err.Error()))
 
-		return nil, err
+			return nil, err
+		}
 	}
 
 	l := &Logic{
@@ -42,6 +50,20 @@ func New(logger *slog.Logger, ragPath string, embedder chromem.EmbeddingFunc) (*
 	}
 
 	return l, l.loadContent()
+}
+
+func (l *Logic) Close() error {
+	return l.db.ExportToFile(path.Join(l.ragPath, dbSaveName), true, "")
+}
+
+func loadSavedDB(dbPath string) (*chromem.DB, error) {
+	db := chromem.NewDB()
+	err := db.ImportFromFile(path.Join(dbPath, dbSaveName), "")
+	if err != nil {
+		return nil, err
+	}
+
+	return db, nil
 }
 
 func (l *Logic) loadContent() error {
@@ -56,8 +78,8 @@ func (l *Logic) loadContent() error {
 		if err != nil {
 			return fmt.Errorf("failed to walk dir %s%s: %w", dir, path, err)
 		}
-		if d.IsDir() || d.Name() == ".gitkeep" {
-			return nil // skip directories and .gitkeep files
+		if d.IsDir() || d.Name() == ".gitkeep" || strings.HasSuffix(path, ".loaded") || d.Name() == dbSaveName {
+			return nil // skip directories, .gitkeep, loaded files and the db file itself
 		}
 
 		l.logger.Info("loading rag content", slog.String("path", path))
@@ -81,6 +103,14 @@ func (l *Logic) loadContent() error {
 			ID:      fmt.Sprintf("%d", id),
 			Content: string(b),
 		})
+		if err != nil {
+			return err
+		}
+
+		err = os.Rename(path, path+".loaded")
+		if err != nil {
+			return err
+		}
 
 		id += 1
 		return err

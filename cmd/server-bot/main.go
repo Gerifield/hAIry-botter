@@ -57,7 +57,7 @@ func main() {
 
 	geminiModel := os.Getenv("GEMINI_MODEL")
 	if geminiModel == "" {
-		geminiModel = "gemini-2.5-flash" // For now
+		geminiModel = "gemini-flash-latest" // Always use the latest flash model by default
 	}
 
 	historySummaryEnv := os.Getenv("HISTORY_SUMMARY")

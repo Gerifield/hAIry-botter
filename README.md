@@ -154,3 +154,9 @@ For local testing you can use ngrok to expose the URL and test it via the Messen
 
 Please do not run this server publicly available for your own safety. (And for your budget, if it is public, anybody can use it and it can quickly add up in the Gemini API usage.)
 It is intended to be an "internal" helper for devs.
+
+
+### Fun fact:
+
+If you add a shell MCP server, you can add any OpenClaw skills in the RAG processing folder and they should work.
+(You might need to have some other CLI tools, but the skills are just text files which is part of the prompt and do shell based function calls.)

@@ -39,7 +39,7 @@ Required env variable(s):
 Optional env variable(s):
 - `ADDR` - Listen address for the server (Default: `:8080`)
 - `GEMINI_MODEL` - Model to use (Default: `gemini-2.5-flash`)
-- `MCP_SERVERS` - MCP HTTP stream server for external function calls (Eg.: `http://localhost:8081/sse`), this could be a comma separated list for multiple servers
+- `MCP_SERVERS` - MCP HTTP stream server for external function calls (Eg.: `http://localhost:8081/mcp`), this could be a comma separated list for multiple servers
 - `SEARCH_ENABLE` - Allow to use Google search for the AI service (Default: `false`, it won't work together with MCP servers)
 - `HISTORY_SUMMARY` - After how many messages the history should be summarized (Default: `20`, `0` means no summary, both model and user messages counts)
 - `LOG_LEVEL` - Log level (Default: `info`, other options: `debug`, `error`, `warn`/`warning`)

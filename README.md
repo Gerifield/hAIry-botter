@@ -1,162 +1,170 @@
+<div align="center">
+
+<img src="https://github.com/user-attachments/assets/10e49300-eb17-41a3-b8c9-affd399c8810" width="250" />
+
 # hAIry Botter 🪄 ✨
 
-<img src="https://github.com/user-attachments/assets/10e49300-eb17-41a3-b8c9-affd399c8810" width=250 />
+**A flexible, HTTP-based AI Chatbot Server powered by Gemini.**
 
-Chatbots are useful, especially after reading about the [https://github.com/YonkoSam/whatsapp-python-chatbot](https://github.com/YonkoSam/whatsapp-python-chatbot) on Reddit.
-I thought why not create a bit more flexible one, not hardcoding to any kind of frontend.
+[![Go Report Card](https://goreportcard.com/badge/github.com/yourusername/hairy-botter)](https://goreportcard.com/report/github.com/yourusername/hairy-botter)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Powered By Gemini](https://img.shields.io/badge/AI-Gemini-blue)](https://deepmind.google/technologies/gemini/)
 
-So this project was born, a simple HTTP based server, with history storing.
+</div>
 
-There could be many improvements for example:
-- Add more AI backends
-- Add a better history store
+---
 
-Right now you just need a frontend for any kind of chat and you can call this stuff.
+## 📖 Overview
 
-Happy playing!
+**hAIry Botter** is a lightweight, backend-agnostic AI server designed to decouple the AI logic from the frontend. Inspired by the [WhatsApp Python Chatbot](https://github.com/YonkoSam/whatsapp-python-chatbot), this project aims to be more flexible by offering a simple HTTP API that supports history, context, and external tools.
 
-## Features
+Whether you are building a CLI, a Telegram bot, or a web interface, you just need to make a simple HTTP call to hAIry Botter to get started.
 
-- Gemini API powered AI service
-- Simple HTTP based server for the AI service
-- MCP (Multi-Call Protocol) support for external function calls (multiple servers supported, example server implementation included)
-- History storing for the conversations (stored in the `history-gemini` folder per sessionID)
-- History summarization to keep the context shorter (optional)
-- RAG (Retrieval-Augmented Generation) support with Gemini API and in-memory database (put any text document into the `bot-context` folder and it will process them at startup)
-- "Personality" support via base prompt (edit the `personality.json` file)
-- CLI client for easy testing
-- Facebook Messenger client for integration
-- Modular design for easy extension
-- Image/PDF input payload handling
+## ✨ Features
 
-## Usage
+* 🧠 **Gemini Powered:** Uses the latest Google Gemini models.
+* 🔌 **MCP Support:** Implements the **Model Context Protocol** to call external servers/functions (includes example implementation).
+* 💾 **Smart History:** Session-based history storage (`history-gemini` folder) with optional auto-summarization to save context window.
+* 📚 **RAG Capable:** Built-in Retrieval-Augmented Generation. Drop text documents into the `bot-context` folder to chat with your data.
+* 🎭 **Custom Personality:** Configurable base prompts via `personality.json`.
+* 🖼️ **Multi-modal:** Native support for Image and PDF inputs.
+* 🚀 **Ready-to-use Clients:** Includes CLI, Telegram, and Facebook Messenger clients.
 
-### Pre-requisites
+---
 
-Required env variable(s):
-- `GEMINI_API_KEY` - For the Gemini API access
+## 🚀 Quick Start
 
-Optional env variable(s):
-- `ADDR` - Listen address for the server (Default: `:8080`)
-- `GEMINI_MODEL` - Model to use (Default: `gemini-2.5-flash`)
-- `MCP_SERVERS` - MCP HTTP stream server for external function calls (Eg.: `http://localhost:8081/mcp`), this could be a comma separated list for multiple servers
-- `SEARCH_ENABLE` - Allow to use Google search for the AI service (Default: `false`, it won't work together with MCP servers)
-- `HISTORY_SUMMARY` - After how many messages the history should be summarized (Default: `20`, `0` means no summary, both model and user messages counts)
-- `LOG_LEVEL` - Log level (Default: `info`, other options: `debug`, `error`, `warn`/`warning`)
+### Option 1: Docker (Recommended)
 
-All the history will be stored under the `history-gemini` folder.
+The easiest way to get up and running is via Docker Compose.
 
-_Note: You can't use the same function name from different MCP servers, since we map the function with the clients, the same function name will override the previous one!_
+1.  Copy `.env.example` to `.env`.
+2.  Set your `GEMINI_API_KEY` in the file.
+3.  Run the stack:
 
-### Running the server
-
-Run the server from source:
-```
-go run cmd/bot-server/main.go
-```
-
-But feel free to download a pre-build package and then just run the binary. The env variables are still the same.
-
-### Example call without unique user id:
-
-If you don't have a user id, you can call the server without it. This will create a new session cookie and store an ID in it.
-
-Example call for the server:
-```
-curl -v -X POST http://127.0.0.1:8080/message -d "message=Hi there"
-```
-
-This will return a cookie which will have a `sessionID`. You need to use this if you want to keep a history, for example:
-
-```
-curl -v -X POST -H "Cookie: sessionID=MGVQOSOZWPMKWAJBQN5KWFR3DF" http://127.0.0.1:8080/message -d "message=Hi there"
-```
-
-Send image along with the question (works with PDF too):
-```
-curl -X POST -v -F "message=What is on this image?" -F "payload=@local_image.jpg" http://127.0.0.1:8080/message
-```
-
-### Example call without unique user id:
-
-If you have a user id, you can use it in the call.
-
-```
-curl -v -H "X-User-ID: someuserid1" -X POST http://127.0.0.1:8080/message -d "message=Hi there"
-```
-
-### Use docker
-
-There is a provided docker compose file.
-First make a copy of the `.env.example` file and rename it to `.env` and set your Gemini api key, then you can run the following command to start the server:
-```
+```bash
 docker-compose up
 ```
 
+### Option 2: Running from Source
 
-### Client examples
+**Prerequisites:** Go installed on your machine.
 
-#### CLI client
+1.  Set the required environment variable:
+    ```bash
+    export GEMINI_API_KEY="your_api_key_here"
+    ```
+2.  Run the server:
+    ```bash
+    go run cmd/bot-server/main.go
+    ```
 
-You can use the CLI client to call the server. It should work out of the box, but there are some optional enviroment variables:
-- `SERVER_URL` - Server base URL if it was changed from the port 8080
+---
 
+## ⚙️ Configuration
+
+You can configure the server using Environment Variables.
+
+| Variable | Description | Default | Required |
+| :--- | :--- | :--- | :---: |
+| `GEMINI_API_KEY` | Your Google Gemini API access key. | - | ✅ |
+| `ADDR` | Server listen address. | `:8080` | ❌ |
+| `GEMINI_MODEL` | The specific model version to use. | `gemini-2.5-flash` | ❌ |
+| `MCP_SERVERS` | Comma-separated list of MCP HTTP stream servers (e.g., `http://localhost:8081/mcp`). | - | ❌ |
+| `SEARCH_ENABLE` | Allow Google Search (Warning: conflicts with MCP). | `false` | ❌ |
+| `HISTORY_SUMMARY` | Message count trigger for history summarization (`0` to disable). | `20` | ❌ |
+| `LOG_LEVEL` | Logging verbosity (`debug`, `info`, `warn`, `error`). | `info` | ❌ |
+
+> **Note on MCP:** You cannot use the same function name across different MCP servers. Since functions are mapped to clients, duplicate names will override previous ones.
+
+---
+
+## 📡 API Usage
+
+The server exposes a simple HTTP endpoint.
+
+### 1. New Conversation (No Session)
+If you don't provide a User ID, the server generates a new session and returns it in a cookie.
+
+```bash
+curl -v -X POST [http://127.0.0.1:8080/message](http://127.0.0.1:8080/message) \
+  -d "message=Hi there"
 ```
+
+### 2. Continued Conversation (With Session)
+To maintain history, pass the `sessionID` cookie returned from the first call.
+
+```bash
+curl -v -X POST \
+  -H "Cookie: sessionID=MGVQOSOZWPMKWAJBQN5KWFR3DF" \
+  [http://127.0.0.1:8080/message](http://127.0.0.1:8080/message) \
+  -d "message=Hi again"
+```
+
+### 3. Using a Custom User ID
+If your frontend manages users, pass the ID via header.
+
+```bash
+curl -v -X POST \
+  -H "X-User-ID: unique-user-123" \
+  [http://127.0.0.1:8080/message](http://127.0.0.1:8080/message) \
+  -d "message=Hi there"
+```
+
+### 4. Multi-modal (Images & PDFs)
+Send files using `multipart/form-data`.
+
+```bash
+curl -v -X POST \
+  -F "message=What is on this image?" \
+  -F "payload=@local_image.jpg" \
+  [http://127.0.0.1:8080/message](http://127.0.0.1:8080/message)
+```
+
+---
+
+## 📱 Included Clients
+
+This repo comes with ready-made clients to demonstrate capabilities.
+
+### 🖥️ CLI Client
+An interactive terminal chat.
+
+```bash
+# Optional: Set SERVER_URL if not using localhost:8080
 go run cmd/cli-client/main.go
 ```
-
-This will lunch an interactive terminal to discuss with.
-
-Feel free to use the generated binary in the release as well.
-
 ![cli-client](examples/client-cli-demo.svg)
 
-#### Telegram client
+### ✈️ Telegram Bot
+Requires a Bot Token from BotFather.
 
-To use this you only need to create a new Bot in Telegram and get the token.
+```bash
+export BOT_TOKEN="your_telegram_token"
+# Optional: restrict access to specific usernames
+export USERNAME_LIMITS="user1,user2" 
 
-Then you can run the server with the following way:
+go run cmd/client-telegram/main.go
 ```
-BOT_TOKEN=<generated_token> go run cmd/client-telegram/main.go
+*Tip: Captions on images are treated as the prompt.*
+
+### 💬 Facebook Messenger
+Requires a configured Facebook App/Page.
+
+**Env Variables:**
+* `ACCESS_TOKEN`, `VERIFY_TOKEN`, `APP_SECRET` (Required)
+* `ADDR` (Default: `:8082`)
+* `AI_SERVICE` (Default: `http://127.0.0.1:8080`)
+
+```bash
+go run cmd/client-messenger/main.go
 ```
+*Tip: Use `ngrok http 8082` to expose this to Facebook for local testing.*
 
-You can set the AI service base url with the `AI_SERVICE` env variable.
+---
 
-If you add a caption to an image it will be used as the question.
+## ⚠️ Important Notes
 
-Env variables:
-- `BOT_TOKEN` - The token of the bot you created in Telegram
-- `AI_SERVICE` - AI service (the server-bot's) address (Default: `http://127.0.0.1:8080`)
-- `USERNAME_LIMITS` - A comma separated list of usernames that are allowed to use the bot (Default: `""`, means everybody can use it)
+> **Security Warning:** Please do not run this server on the public internet without additional authentication. It is intended as an internal helper tool. Public exposure could lead to excessive API usage and costs.
 
-
-#### Facebook messenger client
-
-You can connect the server to Facebook Messenger with this, you will need to have a page and setup the secrets properly. (How to do it is not the scope of this doc.)
-
-Required env variables:
-- `ACCESS_TOKEN` - Access token from the Developer portal
-- `VERIFY_TOKEN` - Verify token from the Developer portal you setup
-- `APP_SECRET` - App secret from the Developer portal you setup
-
-Optional env variables:
-- `GRAPHQL_URL` - GraphQL base url (Default: `https://graph.facebook.com/v22.0`)
-- `ADDR` - Server listening address (Default: `:8082`)
-- `AI_SERVICE` - AI service (the server-bot's) address (Default: `http://127.0.0.1:8080`)
-
-Then you can start chatting with the bot via sending a message to the page.
-(If you configured an MCP in the AI service it will be called too.)
-
-For local testing you can use ngrok to expose the URL and test it via the Messenger app.
-(For example: `ngrok http 8082`)
-
-### Notes
-
-Please do not run this server publicly available for your own safety. (And for your budget, if it is public, anybody can use it and it can quickly add up in the Gemini API usage.)
-It is intended to be an "internal" helper for devs.
-
-
-### Fun fact:
-
-If you add a shell MCP server, you can add any OpenClaw skills in the RAG processing folder and they should work.
-(You might need to have some other CLI tools, but the skills are just text files which is part of the prompt and do shell based function calls.)
+> **💡 Pro Tip:** If you add a **Shell MCP server**, you can add "OpenClaw skills" into the RAG processing folder. These "skills" are text files that become part of the prompt, allowing the AI to execute shell-based function calls!

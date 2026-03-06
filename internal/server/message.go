@@ -18,17 +18,27 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
 	msg := r.PostFormValue("message")
 	userID := r.Header.Get("X-User-ID") // Optionally pass userID in header
 
-	var inlineData *domain.InlineData
-	binReader, binHeader, err := r.FormFile("payload")
-	if err == nil {
-		data := make([]byte, binHeader.Size)
-		if _, err := binReader.Read(data); err != nil {
-			http.Error(w, "failed to read binary data", http.StatusInternalServerError)
-			return
-		}
-		inlineData = &domain.InlineData{
-			MimeType: binHeader.Header.Get("Content-Type"),
-			Data:     data,
+	var inlineData []*domain.InlineData
+	if err := r.ParseMultipartForm(32 << 20); err == nil {
+		for _, fileHeaders := range r.MultipartForm.File {
+			for _, binHeader := range fileHeaders {
+				binReader, err := binHeader.Open()
+				if err != nil {
+					http.Error(w, "failed to open payload file", http.StatusInternalServerError)
+					return
+				}
+				data := make([]byte, binHeader.Size)
+				if _, err := binReader.Read(data); err != nil {
+					_ = binReader.Close()
+					http.Error(w, "failed to read binary data", http.StatusInternalServerError)
+					return
+				}
+				_ = binReader.Close()
+				inlineData = append(inlineData, &domain.InlineData{
+					MimeType: binHeader.Header.Get("Content-Type"),
+					Data:     data,
+				})
+			}
 		}
 	}
 

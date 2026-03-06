@@ -2,7 +2,7 @@ package domain
 
 type Request struct {
 	Message    string
-	InlineData *InlineData
+	InlineData []*InlineData
 }
 type InlineData struct {
 	MimeType string

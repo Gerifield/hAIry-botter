@@ -24,7 +24,7 @@ func New(baseURL string) *Logic {
 	}
 }
 
-func (l *Logic) Send(userID string, msg string, payload []byte) (string, error) {
+func (l *Logic) Send(userID string, msg string, payloads [][]byte) (string, error) {
 	var buff bytes.Buffer
 
 	// Build multipart form data
@@ -34,10 +34,13 @@ func (l *Logic) Send(userID string, msg string, payload []byte) (string, error) 
 	if err != nil {
 		return "", fmt.Errorf("failed to write message filed: %w", err)
 	}
-	// Add file if exists
-	if len(payload) > 0 {
+	// Add files if any
+	for i, payload := range payloads {
+		if len(payload) == 0 {
+			continue
+		}
 		h := make(textproto.MIMEHeader)
-		h.Set("Content-Disposition", multipart.FileContentDisposition("payload", "payload.data"))
+		h.Set("Content-Disposition", multipart.FileContentDisposition("payload", fmt.Sprintf("payload-%d.data", i)))
 		h.Set("Content-Type", http.DetectContentType(payload))
 		part, err := mpw.CreatePart(h)
 		if err != nil {

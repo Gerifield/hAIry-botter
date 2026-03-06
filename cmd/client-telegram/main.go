@@ -90,7 +90,7 @@ func (l *Logic) Handler(ctx context.Context, b *bot.Bot, update *models.Update) 
 		}
 	}
 
-	var payload []byte
+	var payloads [][]byte
 	msg := update.Message.Text
 
 	if len(update.Message.Photo) > 0 {
@@ -115,11 +115,12 @@ func (l *Logic) Handler(ctx context.Context, b *bot.Bot, update *models.Update) 
 		}
 		defer func() { _ = resp.Body.Close() }()
 
-		payload, err = io.ReadAll(resp.Body)
+		data, err := io.ReadAll(resp.Body)
 		if err != nil {
 			fmt.Println("error reading file:", err)
 			return
 		}
+		payloads = append(payloads, data)
 
 		if update.Message.Caption != "" {
 			msg = update.Message.Caption
@@ -127,7 +128,7 @@ func (l *Logic) Handler(ctx context.Context, b *bot.Bot, update *models.Update) 
 	}
 
 	fmt.Println("Sending message to AI service:", msg)
-	res, err := l.httpB.Send(fmt.Sprintf("tg-%d", update.Message.Chat.ID), msg, payload)
+	res, err := l.httpB.Send(fmt.Sprintf("tg-%d", update.Message.Chat.ID), msg, payloads)
 	if err != nil {
 		fmt.Println("error sending message to AI service:", err)
 		return

@@ -208,8 +208,8 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 	if text != "" {
 		promptParts = append(promptParts, genai.Part{Text: text})
 	}
-	if req.InlineData != nil {
-		promptParts = append(promptParts, *genai.NewPartFromBytes(req.InlineData.Data, req.InlineData.MimeType))
+	for _, inlineData := range req.InlineData {
+		promptParts = append(promptParts, *genai.NewPartFromBytes(inlineData.Data, inlineData.MimeType))
 	}
 	logger.Debug("message parts sending to Gemini", slog.Any("parts", promptParts))
 	resp, err := ch.SendMessage(ctx, promptParts...)

@@ -10,9 +10,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/firebase/genkit/go/ai"
+	"github.com/firebase/genkit/go/genkit"
+	"github.com/firebase/genkit/go/plugins/googlegenai"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
-	"google.golang.org/genai"
 
 	"hairy-botter/internal/ai/gemini"
 	gemini_embedding "hairy-botter/internal/ai/gemini-embedding"
@@ -37,6 +39,24 @@ func logLevelEnv() slog.Level {
 	}
 }
 
+// genkitSummarizer implements history.Summarizer using the genkit framework.
+type genkitSummarizer struct {
+	g     *genkit.Genkit
+	model ai.Model
+}
+
+func (s *genkitSummarizer) Summarize(ctx context.Context, systemPrompt, text string) (string, error) {
+	resp, err := genkit.Generate(ctx, s.g,
+		ai.WithModel(s.model),
+		ai.WithSystem(systemPrompt),
+		ai.WithMessages(ai.NewUserTextMessage(text)),
+	)
+	if err != nil {
+		return "", err
+	}
+	return resp.Text(), nil
+}
+
 func main() {
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -57,7 +77,7 @@ func main() {
 
 	geminiModel := os.Getenv("GEMINI_MODEL")
 	if geminiModel == "" {
-		geminiModel = "gemini-flash-latest" // Always use the latest flash model by default
+		geminiModel = "gemini-2.5-flash" // Default to the latest stable flash model
 	}
 
 	historySummaryEnv := os.Getenv("HISTORY_SUMMARY")
@@ -116,18 +136,32 @@ func main() {
 		searchEnable = true
 	}
 
-	// Initialize the AI logic
-	aiClient, err := genai.NewClient(context.Background(), &genai.ClientConfig{
-		APIKey:  geminiKey,
-		Backend: genai.BackendGeminiAPI,
-	})
-	if err != nil {
-		logger.Error("failed to create genai client", slog.String("err", err.Error()))
+	// Initialize the genkit framework with the Google AI (Gemini) plugin.
+	// To use a different provider, swap this plugin (e.g. googlegenai.VertexAI{}, ollama, anthropic, etc.)
+	ga := &googlegenai.GoogleAI{APIKey: geminiKey}
+	g := genkit.Init(context.Background(), genkit.WithPlugins(ga))
 
+	model, err := ga.DefineModel(g, geminiModel, nil)
+	if err != nil {
+		// Model name not in the pre-known list; define with generic multimodal options
+		logger.Warn("model not in known list, defining with generic multimodal options",
+			slog.String("model", geminiModel), slog.String("err", err.Error()))
+		model, err = ga.DefineModel(g, geminiModel, &ai.ModelOptions{
+			Supports: &googlegenai.Multimodal,
+		})
+		if err != nil {
+			logger.Error("failed to define model", slog.String("err", err.Error()))
+			return
+		}
+	}
+
+	embedder, err := ga.DefineEmbedder(g, "gemini-embedding-001", &ai.EmbedderOptions{})
+	if err != nil {
+		logger.Error("failed to define embedder", slog.String("err", err.Error()))
 		return
 	}
 
-	ragEmbedder := gemini_embedding.GeminiEmbeddingFunc(aiClient, "gemini-embedding-001")
+	ragEmbedder := gemini_embedding.EmbeddingFunc(g, embedder)
 	ragL, err := rag.New(logger, "bot-context/", ragEmbedder)
 	if err != nil {
 		logger.Error("failed to create RAG logic", slog.String("err", err.Error()))
@@ -136,15 +170,17 @@ func main() {
 	}
 
 	hist := history.New(logger, "history-gemini/", history.Config{
-		HistorySummary:  historySummary,
-		Summarizer:      aiClient,
-		SummarizerModel: geminiModel,
+		HistorySummary: historySummary,
+		Summarizer: &genkitSummarizer{
+			g:     g,
+			model: model,
+		},
 	})
 
-	aiLogic, err := gemini.New(logger, aiClient, geminiModel, hist, mcpClients, ragL, searchEnable)
+	aiLogic, err := gemini.New(logger, g, model, hist, mcpClients, ragL, searchEnable)
 
 	if err != nil {
-		logger.Error("failed to create gemini logic", slog.String("err", err.Error()))
+		logger.Error("failed to create AI logic", slog.String("err", err.Error()))
 
 		return
 	}

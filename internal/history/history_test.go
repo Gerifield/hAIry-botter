@@ -50,16 +50,16 @@ func TestPathTraversalFixed(t *testing.T) {
 
 	// Test Save with path traversal attempt
 	err = l.Save(ctx, "../attack.txt", nil)
-	if err != nil {
-		t.Fatalf("Save failed: %v", err)
+	if err == nil {
+		t.Fatalf("expected Save() to reject path traversal input, but got no error")
 	}
 
-	// attack.txt should be in historyDir, NOT in tmpDir
+	// attack.txt must not be written outside historyDir (or at all for this invalid input)
 	if _, err := os.Stat(filepath.Join(tmpDir, "attack.txt")); err == nil {
 		t.Error("Vulnerability still exists: Save() wrote file outside of history directory")
 	}
 
-	if _, err := os.Stat(filepath.Join(historyDir, "attack.txt")); os.IsNotExist(err) {
-		t.Error("Save() did not write file to history directory")
+	if _, err := os.Stat(filepath.Join(historyDir, "attack.txt")); err == nil {
+		t.Error("Save() unexpectedly wrote file to history directory for invalid path traversal input")
 	}
 }

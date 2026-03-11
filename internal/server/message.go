@@ -15,6 +15,10 @@ func (s *Server) genSessionID() string {
 }
 
 func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", s.cfg.AllowedOrigin)
+	w.Header().Set("Access-Control-Allow-Methods", s.cfg.AllowedMethods)
+	w.Header().Set("Access-Control-Allow-Headers", s.cfg.AllowedHeaders)
+
 	msg := r.PostFormValue("message")
 	userID := r.Header.Get("X-User-ID") // Optionally pass userID in header
 
@@ -67,9 +71,6 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", s.cfg.AllowedOrigin)
-	w.Header().Set("Access-Control-Allow-Methods", s.cfg.AllowedMethods)
-	w.Header().Set("Access-Control-Allow-Headers", s.cfg.AllowedHeaders)
 	_ = json.NewEncoder(w).Encode(struct {
 		Response string `json:"response"`
 	}{

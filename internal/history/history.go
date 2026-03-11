@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"google.golang.org/genai"
 )
@@ -122,12 +123,16 @@ func (l *Logic) summarize(ctx context.Context, history []*genai.Content) (*genai
 }
 
 func contentToString(history []*genai.Content) string {
-	var res string
+	var sb strings.Builder
 	for _, c := range history {
 		for _, p := range c.Parts {
-			res += fmt.Sprintf("Role: %s, Text:%s\n", c.Role, p.Text)
+			sb.WriteString("Role: ")
+			sb.WriteString(c.Role)
+			sb.WriteString(", Text:")
+			sb.WriteString(p.Text)
+			sb.WriteByte('\n')
 		}
 	}
 
-	return res
+	return sb.String()
 }

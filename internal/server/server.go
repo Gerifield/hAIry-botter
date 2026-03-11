@@ -13,20 +13,29 @@ type ai interface {
 	HandleMessage(ctx context.Context, userID string, req domain.Request) (string, error)
 }
 
+// Config .
+type Config struct {
+	AllowedOrigin  string
+	AllowedMethods string
+	AllowedHeaders string
+}
+
 // Server .
 type Server struct {
 	h     *chi.Mux
 	srv   *http.Server
 	logic ai
+	cfg   Config
 }
 
 // New .
-func New(addr string, aiLogic ai) *Server {
+func New(addr string, aiLogic ai, cfg Config) *Server {
 	h := chi.NewMux()
 	s := &Server{
 		h:     h,
 		srv:   &http.Server{Addr: addr, Handler: h},
 		logic: aiLogic,
+		cfg:   cfg,
 	}
 	s.addRoutes()
 
@@ -37,11 +46,10 @@ func (s *Server) addRoutes() {
 	s.h.Post("/message", s.postMessage)
 
 	// CORS preflight request handler
-	// TODO: make configurable
 	s.h.Options("/*", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-User-ID")
+		w.Header().Set("Access-Control-Allow-Origin", s.cfg.AllowedOrigin)
+		w.Header().Set("Access-Control-Allow-Methods", s.cfg.AllowedMethods)
+		w.Header().Set("Access-Control-Allow-Headers", s.cfg.AllowedHeaders)
 		w.WriteHeader(http.StatusOK)
 	})
 }

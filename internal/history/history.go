@@ -85,7 +85,12 @@ func (l *Logic) Save(ctx context.Context, sessionID string, history []*genai.Con
 		}
 	}
 
-	return os.WriteFile(filepath.Join(l.historyPath, filepath.Base(sessionID)), b, 0644)
+	safeID := filepath.Base(sessionID)
+	if safeID == "." || safeID == ".." || safeID != sessionID {
+		return fmt.Errorf("invalid sessionID")
+	}
+
+	return os.WriteFile(filepath.Join(l.historyPath, safeID), b, 0644)
 }
 
 func (l *Logic) summarize(ctx context.Context, history []*genai.Content) (*genai.Content, error) {

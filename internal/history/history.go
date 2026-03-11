@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"google.golang.org/genai"
 )
@@ -43,7 +44,7 @@ type saveFormat struct {
 
 // Read .
 func (l *Logic) Read(ctx context.Context, sessionID string) ([]*genai.Content, error) {
-	b, err := os.ReadFile(fmt.Sprintf("%s/%s", l.historyPath, sessionID))
+	b, err := os.ReadFile(filepath.Join(l.historyPath, filepath.Base(sessionID)))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) { // Not yet exists, ignore
 			return make([]*genai.Content, 0), nil
@@ -84,7 +85,7 @@ func (l *Logic) Save(ctx context.Context, sessionID string, history []*genai.Con
 		}
 	}
 
-	return os.WriteFile(fmt.Sprintf("%s/%s", l.historyPath, sessionID), b, 0644)
+	return os.WriteFile(filepath.Join(l.historyPath, filepath.Base(sessionID)), b, 0644)
 }
 
 func (l *Logic) summarize(ctx context.Context, history []*genai.Content) (*genai.Content, error) {

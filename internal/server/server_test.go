@@ -51,5 +51,11 @@ func TestCORSHeaders(t *testing.T) {
 		if origin := w.Header().Get("Access-Control-Allow-Origin"); origin != cfg.AllowedOrigin {
 			t.Errorf("expected origin %s, got %s", cfg.AllowedOrigin, origin)
 		}
+		if methods := w.Header().Get("Access-Control-Allow-Methods"); methods != cfg.AllowedMethods {
+			t.Errorf("expected methods %s, got %s", cfg.AllowedMethods, methods)
+		}
+		if headers := w.Header().Get("Access-Control-Allow-Headers"); headers != cfg.AllowedHeaders {
+			t.Errorf("expected headers %s, got %s", cfg.AllowedHeaders, headers)
+		}
 	})
 }

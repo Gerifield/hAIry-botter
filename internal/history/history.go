@@ -45,6 +45,10 @@ type saveFormat struct {
 
 // Read .
 func (l *Logic) Read(ctx context.Context, sessionID string) ([]*genai.Content, error) {
+	if strings.Contains(sessionID, "/") || strings.Contains(sessionID, "\\") || strings.Contains(sessionID, "..") {
+		return nil, errors.New("invalid sessionID")
+	}
+
 	b, err := os.ReadFile(filepath.Join(l.historyPath, filepath.Base(sessionID)))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) { // Not yet exists, ignore
@@ -64,6 +68,10 @@ func (l *Logic) Read(ctx context.Context, sessionID string) ([]*genai.Content, e
 
 // Save .
 func (l *Logic) Save(ctx context.Context, sessionID string, history []*genai.Content) error {
+	if strings.Contains(sessionID, "/") || strings.Contains(sessionID, "\\") || strings.Contains(sessionID, "..") {
+		return errors.New("invalid sessionID")
+	}
+
 	var b []byte
 	var err error
 	if l.config.HistorySummary > 0 && len(history) >= l.config.HistorySummary {
@@ -86,12 +94,7 @@ func (l *Logic) Save(ctx context.Context, sessionID string, history []*genai.Con
 		}
 	}
 
-	safeID := filepath.Base(sessionID)
-	if safeID == "." || safeID == ".." || safeID != sessionID {
-		return fmt.Errorf("invalid sessionID")
-	}
-
-	return os.WriteFile(filepath.Join(l.historyPath, safeID), b, 0644)
+	return os.WriteFile(filepath.Join(l.historyPath, filepath.Base(sessionID)), b, 0644)
 }
 
 func (l *Logic) summarize(ctx context.Context, history []*genai.Content) (*genai.Content, error) {
@@ -123,16 +126,12 @@ func (l *Logic) summarize(ctx context.Context, history []*genai.Content) (*genai
 }
 
 func contentToString(history []*genai.Content) string {
-	var sb strings.Builder
+	var res string
 	for _, c := range history {
 		for _, p := range c.Parts {
-			sb.WriteString("Role: ")
-			sb.WriteString(c.Role)
-			sb.WriteString(", Text:")
-			sb.WriteString(p.Text)
-			sb.WriteByte('\n')
+			res += fmt.Sprintf("Role: %s, Text:%s\n", c.Role, p.Text)
 		}
 	}
 
-	return sb.String()
+	return res
 }

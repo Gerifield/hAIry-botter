@@ -148,25 +148,7 @@ func main() {
 
 		return
 	}
-
-	corsOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
-	if corsOrigin == "" {
-		corsOrigin = "*"
-	}
-	corsMethods := os.Getenv("CORS_ALLOWED_METHODS")
-	if corsMethods == "" {
-		corsMethods = "POST, OPTIONS"
-	}
-	corsHeaders := os.Getenv("CORS_ALLOWED_HEADERS")
-	if corsHeaders == "" {
-		corsHeaders = "Content-Type, X-User-ID"
-	}
-
-	srv := server.New(addr, aiLogic, server.Config{
-		AllowedOrigin:  corsOrigin,
-		AllowedMethods: corsMethods,
-		AllowedHeaders: corsHeaders,
-	})
+	srv := server.New(addr, aiLogic)
 
 	stopCh := make(chan os.Signal, 1)
 	signal.Notify(stopCh, os.Interrupt, os.Kill)

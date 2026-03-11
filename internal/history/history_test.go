@@ -38,8 +38,8 @@ func TestPathTraversalFixed(t *testing.T) {
 	// filepath.Base("../secret.txt") -> "secret.txt"
 	// filepath.Join(historyDir, "secret.txt") -> tmpDir + "/history/secret.txt" (should not exist)
 	_, err = l.Read(ctx, "../secret.txt")
-	if err != nil && err.Error() == "invalid character 't' looking for beginning of value" {
-		t.Error("Vulnerability still exists: Read() accessed file outside of history directory")
+	if err == nil {
+		t.Error("Vulnerability still exists: Read() did not reject path traversal input")
 	}
 
 	// Verify it looked in the right place (or at least not the wrong place)

@@ -142,10 +142,6 @@ func (l *Logic) Handler(ctx context.Context, b *bot.Bot, update *models.Update) 
 		return
 	}
 
-	l.mu.Lock()
-	l.chatID = update.Message.Chat.ID
-	l.mu.Unlock()
-
 	// If we have any limits set, check them
 	if len(l.userLimits) > 0 {
 		found := false
@@ -165,6 +161,10 @@ func (l *Logic) Handler(ctx context.Context, b *bot.Bot, update *models.Update) 
 			return
 		}
 	}
+
+	l.mu.Lock()
+	l.chatID = update.Message.Chat.ID
+	l.mu.Unlock()
 
 	var payloads [][]byte
 	msg := update.Message.Text

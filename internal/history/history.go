@@ -45,11 +45,13 @@ type saveFormat struct {
 
 // Read .
 func (l *Logic) Read(ctx context.Context, sessionID string) ([]*genai.Content, error) {
-	if strings.Contains(sessionID, "/") || strings.Contains(sessionID, "\\") || strings.Contains(sessionID, "..") {
+	trimmedID := strings.TrimSpace(sessionID)
+	if trimmedID == "" || trimmedID == "." ||
+		strings.Contains(trimmedID, "/") || strings.Contains(trimmedID, "\\") || strings.Contains(trimmedID, "..") {
 		return nil, errors.New("invalid sessionID")
 	}
 
-	b, err := os.ReadFile(filepath.Join(l.historyPath, filepath.Base(sessionID)))
+	b, err := os.ReadFile(filepath.Join(l.historyPath, filepath.Base(trimmedID)))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) { // Not yet exists, ignore
 			return make([]*genai.Content, 0), nil

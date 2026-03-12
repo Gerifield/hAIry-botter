@@ -22,6 +22,8 @@ services:
       AI_SERVICE: http://bot:8080
     env_file:
       - .env
+    ports:
+      - "8085:8085"
     depends_on:
       - bot
 

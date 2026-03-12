@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -53,12 +54,42 @@ func main() {
 		return
 	}
 
+	l.bot = b
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8085"
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", l.httpHandler)
+
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: mux,
+	}
+
+	go func() {
+		fmt.Println("Starting HTTP server on port", port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			fmt.Println("HTTP server error:", err)
+		}
+	}()
+
 	b.Start(ctx)
+
+	// Graceful shutdown of HTTP server
+	if err := srv.Shutdown(context.Background()); err != nil {
+		fmt.Println("HTTP server shutdown error:", err)
+	}
 }
 
 type Logic struct {
 	httpB      *httpBotter.Logic
 	userLimits []string
+	chatID     int64
+	mu         sync.RWMutex
+	bot        *bot.Bot
 }
 
 func New(baseURL string, userLimit []string) *Logic {
@@ -68,8 +99,53 @@ func New(baseURL string, userLimit []string) *Logic {
 	}
 }
 
+func (l *Logic) httpHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	payload := r.FormValue("payload")
+	if payload == "" {
+		http.Error(w, "Empty payload", http.StatusBadRequest)
+		return
+	}
+
+	l.mu.RLock()
+	chatID := l.chatID
+	l.mu.RUnlock()
+
+	if chatID == 0 {
+		http.Error(w, "No active chat found. Please send a message to the bot first.", http.StatusServiceUnavailable)
+		return
+	}
+
+	_, err := l.bot.SendMessage(r.Context(), &bot.SendMessageParams{
+		ParseMode: models.ParseModeMarkdown,
+		ChatID:    chatID,
+		Text:      bot.EscapeMarkdownUnescaped(payload),
+	})
+
+	if err != nil {
+		fmt.Println("Error sending HTTP payload to Telegram:", err)
+		http.Error(w, "Failed to send message to Telegram", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Message sent successfully"))
+}
+
 // Handler .
 func (l *Logic) Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
+	if update.Message == nil {
+		return
+	}
+
+	l.mu.Lock()
+	l.chatID = update.Message.Chat.ID
+	l.mu.Unlock()
+
 	// If we have any limits set, check them
 	if len(l.userLimits) > 0 {
 		found := false

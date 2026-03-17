@@ -4,7 +4,7 @@
 
 # hAIry Botter 🪄 ✨
 
-**A flexible, HTTP-based AI Chatbot Server powered by Gemini.**
+**A flexible, HTTP-based AI Chatbot Server powered by Gemini via Firebase Genkit.**
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/yourusername/hairy-botter)](https://goreportcard.com/report/github.com/yourusername/hairy-botter)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -22,11 +22,11 @@ Whether you are building a CLI, a Telegram bot, or a web interface, you just nee
 
 ## ✨ Features
 
-* 🧠 **Gemini Powered:** Uses the latest Google Gemini models.
-* 🔌 **MCP Support:** Implements the **Model Context Protocol** to call external servers/functions (includes example implementation).
+* 🧠 **Genkit Powered:** Uses [Firebase Genkit](https://firebase.google.com/docs/genkit) as the AI framework, backed by Google Gemini models. Swapping providers (Vertex AI, Ollama, etc.) requires only a plugin change.
+* 🔌 **MCP Support:** Implements the **Model Context Protocol** to call external servers/functions via Genkit's MCP plugin (includes example implementation).
 * 💾 **Smart History:** Session-based history storage (`history-gemini` folder) with optional auto-summarization to save context window.
 * 📚 **RAG Capable:** Built-in Retrieval-Augmented Generation. Drop text documents into the `bot-context` folder to chat with your data.
-* 🎭 **Custom Personality:** Configurable base prompts via `personality.json`.
+* 🎭 **Custom Personality:** Configurable system prompt via `personality.txt`.
 * 🖼️ **Multi-modal:** Native support for Image and PDF inputs.
 * 🚀 **Ready-to-use Clients:** Includes CLI, Telegram, and Facebook Messenger clients.
 
@@ -56,7 +56,7 @@ docker-compose up
     ```
 2.  Run the server:
     ```bash
-    go run cmd/bot-server/main.go
+    go run cmd/server-bot/main.go
     ```
 
 ---
@@ -69,11 +69,14 @@ You can configure the server using Environment Variables.
 | :--- | :--- | :--- | :---: |
 | `GEMINI_API_KEY` | Your Google Gemini API access key. | - | ✅ |
 | `ADDR` | Server listen address. | `:8080` | ❌ |
-| `GEMINI_MODEL` | The specific model version to use. | `gemini-2.5-flash` | ❌ |
+| `GEMINI_MODEL` | The specific model version to use. | `gemini-flash-latest` | ❌ |
 | `MCP_SERVERS` | Comma-separated list of MCP HTTP stream servers (e.g., `http://localhost:8081/mcp`). | - | ❌ |
-| `SEARCH_ENABLE` | Allow Google Search (Warning: conflicts with MCP). | `false` | ❌ |
+| `SEARCH_ENABLE` | Allow Google Search grounding (Warning: conflicts with MCP). | `false` | ❌ |
 | `HISTORY_SUMMARY` | Message count trigger for history summarization (`0` to disable). | `20` | ❌ |
 | `LOG_LEVEL` | Logging verbosity (`debug`, `info`, `warn`, `error`). | `info` | ❌ |
+| `CORS_ALLOWED_ORIGIN` | CORS allowed origin header. | `*` | ❌ |
+| `CORS_ALLOWED_METHODS` | CORS allowed methods header. | `POST, OPTIONS` | ❌ |
+| `CORS_ALLOWED_HEADERS` | CORS allowed headers header. | `Content-Type, X-User-ID` | ❌ |
 
 > **Note on MCP:** You cannot use the same function name across different MCP servers. Since functions are mapped to clients, duplicate names will override previous ones.
 
@@ -132,7 +135,7 @@ An interactive terminal chat.
 
 ```bash
 # Optional: Set SERVER_URL if not using localhost:8080
-go run cmd/cli-client/main.go
+go run cmd/client-cli/main.go
 ```
 ![cli-client](examples/client-cli-demo.svg)
 
@@ -157,9 +160,27 @@ Requires a configured Facebook App/Page.
 * `AI_SERVICE` (Default: `http://127.0.0.1:8080`)
 
 ```bash
-go run cmd/client-messenger/main.go
+go run cmd/client-fb-messenger/main.go
 ```
 *Tip: Use `ngrok http 8082` to expose this to Facebook for local testing.*
+
+---
+
+## 🎭 Personality
+
+The bot's system prompt is loaded from a `personality.txt` file in the working directory. It is plain text — just write your system prompt directly, no JSON wrapping needed.
+
+```
+You are a helpful assistant named hAIry. Be concise and friendly.
+```
+
+> **Note:** Previous versions used `personality.json` with a JSON structure. This file must be migrated to plain text.
+
+---
+
+## 💾 History Compatibility
+
+History files are stored in the `history-gemini/` folder as JSON. After the migration from the raw `genai` SDK to Firebase Genkit, the internal message format changed (`parts` → `content`). **Old history files are not compatible** and should be deleted or the folder cleared before upgrading.
 
 ---
 

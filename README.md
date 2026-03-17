@@ -90,7 +90,7 @@ The server exposes a simple HTTP endpoint.
 If you don't provide a User ID, the server generates a new session and returns it in a cookie.
 
 ```bash
-curl -v -X POST [http://127.0.0.1:8080/message](http://127.0.0.1:8080/message) \
+curl -v -X POST http://127.0.0.1:8080/message \
   -d "message=Hi there"
 ```
 
@@ -100,7 +100,7 @@ To maintain history, pass the `sessionID` cookie returned from the first call.
 ```bash
 curl -v -X POST \
   -H "Cookie: sessionID=MGVQOSOZWPMKWAJBQN5KWFR3DF" \
-  [http://127.0.0.1:8080/message](http://127.0.0.1:8080/message) \
+  http://127.0.0.1:8080/message \
   -d "message=Hi again"
 ```
 
@@ -110,7 +110,7 @@ If your frontend manages users, pass the ID via header.
 ```bash
 curl -v -X POST \
   -H "X-User-ID: unique-user-123" \
-  [http://127.0.0.1:8080/message](http://127.0.0.1:8080/message) \
+  http://127.0.0.1:8080/message \
   -d "message=Hi there"
 ```
 
@@ -121,7 +121,7 @@ Send files using `multipart/form-data`.
 curl -v -X POST \
   -F "message=What is on this image?" \
   -F "payload=@local_image.jpg" \
-  [http://127.0.0.1:8080/message](http://127.0.0.1:8080/message)
+  http://127.0.0.1:8080/message
 ```
 
 ---

@@ -2,6 +2,7 @@
 version: '3.4'
 services:
   bot:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: docker/Dockerfile-bot
@@ -14,6 +15,7 @@ services:
       - bot-data:/app
 
   client-telegram:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: docker/Dockerfile-client-telegram

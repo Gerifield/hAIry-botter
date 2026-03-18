@@ -2,13 +2,32 @@ package gemini
 
 import (
 	"github.com/firebase/genkit/go/ai"
+	"github.com/firebase/genkit/go/core/api"
 	"github.com/firebase/genkit/go/genkit"
 	"github.com/firebase/genkit/go/plugins/googlegenai"
 	"google.golang.org/genai"
 )
 
+// AgentConfigurator .
+type AgentConfigurator interface {
+	api.Plugin
+	modelDefiner
+	modelEmbedder
+}
+type modelDefiner interface {
+	DefineModel(g *genkit.Genkit, name string, opts *ai.ModelOptions) (ai.Model, error)
+}
+
+type modelEmbedder interface {
+	DefineEmbedder(g *genkit.Genkit, name string, embedOpts *ai.EmbedderOptions) (ai.Embedder, error)
+}
+
+func ConfigPlugin(apiKey string) AgentConfigurator {
+	return &googlegenai.GoogleAI{APIKey: apiKey}
+}
+
 // ConfigModel .
-func ConfigModel(g *genkit.Genkit, ga *googlegenai.GoogleAI, modelName string) (ai.Model, error) {
+func ConfigModel(g *genkit.Genkit, ga modelDefiner, modelName string) (ai.Model, error) {
 	geminiModelOptions := (*ai.ModelOptions)(nil)
 	if modelName == "" {
 		modelName = "gemini-flash-latest" // Always use the latest flash model by default

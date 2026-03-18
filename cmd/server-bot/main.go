@@ -19,7 +19,6 @@ import (
 
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
-	"github.com/firebase/genkit/go/plugins/googlegenai"
 )
 
 func logLevelEnv() slog.Level {
@@ -74,18 +73,6 @@ func main() {
 		return
 	}
 
-	geminiModel := os.Getenv("GEMINI_MODEL")
-	//geminiModelOptions := (*ai.ModelOptions)(nil)
-	//if geminiModel == "" {
-	//	geminiModel = "gemini-flash-latest" // Always use the latest flash model by default
-	//	geminiModelOptions = &ai.ModelOptions{
-	//		Label:    "Gemini Flash Latest",
-	//		Versions: []string{},
-	//		Supports: &googlegenai.Multimodal,
-	//		Stage:    ai.ModelStageUnstable,
-	//	}
-	//}
-
 	historySummaryEnv := os.Getenv("HISTORY_SUMMARY")
 	historySummary := 20 // Default to 20
 	if historySummaryEnv != "" {
@@ -121,11 +108,10 @@ func main() {
 	}
 
 	// Initialize the Gemini AI logic
-	// TODO: Make this more universal config and add additional model suport
-	ga := &googlegenai.GoogleAI{APIKey: geminiKey}
+	ga := gemini.ConfigPlugin(geminiKey)
 	g := genkit.Init(context.Background(), genkit.WithPlugins(ga))
 
-	model, err := gemini.ConfigModel(g, ga, geminiModel)
+	model, err := gemini.ConfigModel(g, ga, os.Getenv("GEMINI_MODEL"))
 	if err != nil {
 		logger.Error("failed to define model", slog.String("err", err.Error()))
 
@@ -133,6 +119,7 @@ func main() {
 	}
 	customModelConfig := gemini.CustomConfig(searchEnable)
 
+	// TODO: Make a better, more separated embedder config
 	embedder, err := ga.DefineEmbedder(g, "gemini-embedding-001", &ai.EmbedderOptions{})
 	if err != nil {
 		logger.Error("failed to define embedder", slog.String("err", err.Error()))

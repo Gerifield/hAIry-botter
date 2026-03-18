@@ -15,7 +15,6 @@ import (
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
 	genkitMCP "github.com/firebase/genkit/go/plugins/mcp"
-	"google.golang.org/genai"
 )
 
 type historyLogic interface {
@@ -24,8 +23,6 @@ type historyLogic interface {
 }
 
 type contextKey string
-
-const sessionIDKey contextKey = "x-session-id"
 
 // Logic .
 type Logic struct {
@@ -37,14 +34,14 @@ type Logic struct {
 	persona string
 
 	toolRefs     []ai.ToolRef
-	searchEnable bool
+	customConfig any
 
 	// RAG related fields
 	ragL *rag.Logic
 }
 
 // New .
-func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyLogic, mcpClientAddrs []string, ragL *rag.Logic, searchEnable bool) (*Logic, error) {
+func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyLogic, mcpClientAddrs []string, ragL *rag.Logic, customConfig any) (*Logic, error) {
 	var tools []ai.Tool
 	persona, err := readPersonality()
 	if err != nil {
@@ -91,7 +88,7 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 		history:      history,
 		persona:      persona,
 		toolRefs:     toolRefs,
-		searchEnable: searchEnable,
+		customConfig: customConfig,
 		ragL:         ragL,
 	}, nil
 }
@@ -158,22 +155,8 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 	userPromptParts = append(userPromptParts, ai.NewTextPart(req.Message))
 	hist = append(hist, ai.NewUserMessage(userPromptParts...))
 
-	logger.Debug("message parts sending to Gemini", slog.Any("parts", ragPromptParts))
-	// TODO: We could re-use a flow here maybe, but for simplicity we create a new one for each message. We can optimize later if needed.
-
-	// TODO: Move these somewhere to make it changeable
-	geminiSpecConfig := &genai.GenerateContentConfig{
-		ThinkingConfig: &genai.ThinkingConfig{
-			// ThinkingBudget: genai.Ptr[int32](0),
-			ThinkingLevel: genai.ThinkingLevelMinimal, // This is for the Gemini 3, Pro doesn't support it, just flash: https://ai.google.dev/gemini-api/docs/thinking#thinking-levels
-		},
-	}
-	// If the search is enabled, add this as a custom config, it is GEMINI ONLY!
-	if l.searchEnable {
-		geminiSpecConfig.Tools = []*genai.Tool{
-			{GoogleSearch: &genai.GoogleSearch{}},
-		}
-	}
+	logger.Debug("message parts sending to LLM", slog.Any("parts", ragPromptParts))
+	// TODO: We could re-use a flow here maybe, but for simplicity we create a new generate just for each message. We can optimize later if needed.
 
 	resp, err := genkit.Generate(ctx, l.g,
 		// ai.WithPrompt(), // added to as messages
@@ -182,7 +165,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 		ai.WithTools(l.toolRefs...),
 		ai.WithToolChoice(ai.ToolChoiceAuto),
 		ai.WithMessages(hist...),
-		ai.WithConfig(geminiSpecConfig)) // TODO: if we rewrite, make this smarter
+		ai.WithConfig(l.customConfig)) // It has a nil check internally
 	if err != nil {
 		return "", err
 	}

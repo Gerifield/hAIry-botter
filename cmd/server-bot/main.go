@@ -19,6 +19,7 @@ import (
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
 	"github.com/firebase/genkit/go/plugins/googlegenai"
+	"google.golang.org/genai"
 )
 
 func logLevelEnv() slog.Level {
@@ -154,7 +155,21 @@ func main() {
 		},
 	})
 
-	aiLogic, err := gemini.New(logger, g, model, hist, mcpClientAddrs, ragL, searchEnable)
+	// TODO: Move these somewhere to make it changeable
+	geminiSpecConfig := &genai.GenerateContentConfig{
+		ThinkingConfig: &genai.ThinkingConfig{
+			// ThinkingBudget: genai.Ptr[int32](0),
+			ThinkingLevel: genai.ThinkingLevelMinimal, // This is for the Gemini 3, Pro doesn't support it, just flash: https://ai.google.dev/gemini-api/docs/thinking#thinking-levels
+		},
+	}
+	// If the search is enabled, add this as a custom config, it is GEMINI ONLY!
+	if searchEnable {
+		geminiSpecConfig.Tools = []*genai.Tool{
+			{GoogleSearch: &genai.GoogleSearch{}},
+		}
+	}
+
+	aiLogic, err := gemini.New(logger, g, model, hist, mcpClientAddrs, ragL, geminiSpecConfig)
 
 	if err != nil {
 		logger.Error("failed to create AI logic", slog.String("err", err.Error()))

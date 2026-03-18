@@ -1,5 +1,5 @@
-// Package gemini contains the AI logic backed by Firebase Genkit (supports Gemini and other providers)
-package gemini
+// Package agent contains the AI logic backed by Firebase Genkit (supports Gemini and other providers)
+package agent
 
 import (
 	"context"

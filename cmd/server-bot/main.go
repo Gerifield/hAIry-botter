@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"hairy-botter/internal/ai/agent"
 	"hairy-botter/internal/ai/gemini"
 	gemini_embedding "hairy-botter/internal/ai/gemini-embedding"
 	"hairy-botter/internal/history"
@@ -19,7 +20,6 @@ import (
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
 	"github.com/firebase/genkit/go/plugins/googlegenai"
-	"google.golang.org/genai"
 )
 
 func logLevelEnv() slog.Level {
@@ -75,16 +75,16 @@ func main() {
 	}
 
 	geminiModel := os.Getenv("GEMINI_MODEL")
-	geminiModelOptions := (*ai.ModelOptions)(nil)
-	if geminiModel == "" {
-		geminiModel = "gemini-flash-latest" // Always use the latest flash model by default
-		geminiModelOptions = &ai.ModelOptions{
-			Label:    "Gemini Flash Latest",
-			Versions: []string{},
-			Supports: &googlegenai.Multimodal,
-			Stage:    ai.ModelStageUnstable,
-		}
-	}
+	//geminiModelOptions := (*ai.ModelOptions)(nil)
+	//if geminiModel == "" {
+	//	geminiModel = "gemini-flash-latest" // Always use the latest flash model by default
+	//	geminiModelOptions = &ai.ModelOptions{
+	//		Label:    "Gemini Flash Latest",
+	//		Versions: []string{},
+	//		Supports: &googlegenai.Multimodal,
+	//		Stage:    ai.ModelStageUnstable,
+	//	}
+	//}
 
 	historySummaryEnv := os.Getenv("HISTORY_SUMMARY")
 	historySummary := 20 // Default to 20
@@ -121,16 +121,17 @@ func main() {
 	}
 
 	// Initialize the Gemini AI logic
-	// TODO: Make this universal
+	// TODO: Make this more universal config and add additional model suport
 	ga := &googlegenai.GoogleAI{APIKey: geminiKey}
 	g := genkit.Init(context.Background(), genkit.WithPlugins(ga))
 
-	model, err := ga.DefineModel(g, geminiModel, geminiModelOptions)
+	model, err := gemini.ConfigModel(g, ga, geminiModel)
 	if err != nil {
 		logger.Error("failed to define model", slog.String("err", err.Error()))
 
 		return
 	}
+	customModelConfig := gemini.CustomConfig(searchEnable)
 
 	embedder, err := ga.DefineEmbedder(g, "gemini-embedding-001", &ai.EmbedderOptions{})
 	if err != nil {
@@ -155,22 +156,7 @@ func main() {
 		},
 	})
 
-	// TODO: Move these somewhere to make it changeable
-	geminiSpecConfig := &genai.GenerateContentConfig{
-		ThinkingConfig: &genai.ThinkingConfig{
-			// ThinkingBudget: genai.Ptr[int32](0),
-			ThinkingLevel: genai.ThinkingLevelMinimal, // This is for the Gemini 3, Pro doesn't support it, just flash: https://ai.google.dev/gemini-api/docs/thinking#thinking-levels
-		},
-	}
-	// If the search is enabled, add this as a custom config, it is GEMINI ONLY!
-	if searchEnable {
-		geminiSpecConfig.Tools = []*genai.Tool{
-			{GoogleSearch: &genai.GoogleSearch{}},
-		}
-	}
-
-	aiLogic, err := gemini.New(logger, g, model, hist, mcpClientAddrs, ragL, geminiSpecConfig)
-
+	aiLogic, err := agent.New(logger, g, model, hist, mcpClientAddrs, ragL, customModelConfig)
 	if err != nil {
 		logger.Error("failed to create AI logic", slog.String("err", err.Error()))
 

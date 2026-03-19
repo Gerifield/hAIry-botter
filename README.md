@@ -71,7 +71,7 @@ You can configure the server using Environment Variables.
 | `ADDR` | Server listen address. | `:8080` | ❌ |
 | `GEMINI_MODEL` | The specific model version to use. | `gemini-flash-latest` | ❌ |
 | `MCP_SERVERS` | Comma-separated list of MCP HTTP stream servers (e.g., `http://localhost:8081/mcp`). | - | ❌ |
-| `SEARCH_ENABLE` | Allow Google Search grounding (Warning: conflicts with MCP). | `false` | ❌ |
+| `GEMINI_SEARCH_DISABLED` | Set to `true` or `1` to disable Google Search grounding. Search is **enabled by default**. | `false` | ❌ |
 | `HISTORY_SUMMARY` | Message count trigger for history summarization (`0` to disable). | `20` | ❌ |
 | `LOG_LEVEL` | Logging verbosity (`debug`, `info`, `warn`, `error`). | `info` | ❌ |
 | `CORS_ALLOWED_ORIGIN` | CORS allowed origin header. | `*` | ❌ |
@@ -79,6 +79,8 @@ You can configure the server using Environment Variables.
 | `CORS_ALLOWED_HEADERS` | CORS allowed headers header. | `Content-Type, X-User-ID` | ❌ |
 
 > **Note on MCP:** You cannot use the same function name across different MCP servers. Since functions are mapped to clients, duplicate names will override previous ones.
+
+> **Note on Search + MCP:** Google Search grounding and MCP tools can now be used **simultaneously**. On Gemini 3.0 models, both are active at the same time — the model can call your MCP tools and ground responses in live search results within the same conversation. To opt out of search, set `GEMINI_SEARCH_DISABLED=true`.
 
 ---
 

@@ -120,11 +120,9 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 			return "", err
 		}
 
-		// Collect the results
-		ragContextDocs = ragContent.Documents
-
-		// If we found content, log it
-		if len(ragContextDocs) > 0 {
+		// If we found content, collect it and log
+		if len(ragContent.Documents) > 0 {
+			ragContextDocs = ragContent.Documents
 			logger.Info("RAG content found, adding to the request", slog.Int("num_results", len(ragContextDocs)))
 		}
 	}

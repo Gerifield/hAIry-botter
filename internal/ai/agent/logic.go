@@ -107,20 +107,21 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 	}
 
 	logger.Info("generating chat content")
-	ragContextDocs := make([]string, 0)
+	ragContextDocs := make([]*ai.Document, 0)
 	if l.ragL != nil {
 		logger.Info("adding RAG context to history")
-		ragContent, err := l.ragL.Query(ctx, req.Message, 3) // Query with the message as context
+		ragContent, err := l.ragL.Retrieve(ctx, &ai.RetrieverRequest{
+			Query:   ai.DocumentFromText(req.Message, nil),
+			Options: map[string]any{"limit": 3},
+		})
 		if err != nil {
 			logger.Error("failed to query RAG content", slog.String("error", err.Error()))
 
 			return "", err
 		}
 
-		// Collect the results into a string slice
-		for _, res := range ragContent {
-			ragContextDocs = append(ragContextDocs, res.Content)
-		}
+		// Collect the results
+		ragContextDocs = ragContent.Documents
 
 		// If we found content, log it
 		if len(ragContextDocs) > 0 {
@@ -151,7 +152,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 	}
 
 	if len(ragContextDocs) > 0 {
-		genOpts = append(genOpts, ai.WithTextDocs(ragContextDocs...))
+		genOpts = append(genOpts, ai.WithDocs(ragContextDocs...))
 	}
 
 	resp, err := genkit.Generate(ctx, l.g, genOpts...) // TODO: if we rewrite, make this smarter

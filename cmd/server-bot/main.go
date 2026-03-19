@@ -96,10 +96,10 @@ func main() {
 		}
 	}
 
-	var searchEnable bool
-	searchEnabled := os.Getenv("SEARCH_ENABLE")
-	if searchEnabled == "true" || searchEnabled == "1" {
-		searchEnable = true
+	searchEnable := true
+	searchDisabled := os.Getenv("GEMINI_SEARCH_DISABLED")
+	if searchDisabled == "true" || searchDisabled == "1" {
+		searchEnable = false
 	}
 
 	// Initialize the Gemini AI logic

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 
 	"hairy-botter/internal/ai/domain"
 	"hairy-botter/internal/rag"
@@ -108,8 +107,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 	}
 
 	logger.Info("generating chat content")
-	ragPromptParts := make([]*ai.Part, 0)
-	ragFound := false
+	ragContextDocs := make([]string, 0)
 	if l.ragL != nil {
 		logger.Info("adding RAG context to history")
 		ragContent, err := l.ragL.Query(ctx, req.Message, 3) // Query with the message as context
@@ -120,29 +118,14 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 		}
 
 		// Collect the results into a string slice
-		ragRes := make([]string, 0)
 		for _, res := range ragContent {
-			ragRes = append(ragRes, res.Content)
+			ragContextDocs = append(ragContextDocs, res.Content)
 		}
 
-		// Convert the result to a single genai.Part
-		if len(ragRes) > 0 {
-			// TODO: Use an "Evaluator" instead of this
-			logger.Info("RAG content found, adding to the request", slog.Int("num_results", len(ragRes)))
-
-			// Add a little context info and an additional line break
-			ragRes = append([]string{"Context from the knowledge base:"}, ragRes...)
-			ragRes = append(ragRes, "\n")
-
-			ragPromptParts = append(ragPromptParts, ai.NewTextPart(strings.Join(ragRes, "\n")))
-
-			ragFound = true
+		// If we found content, log it
+		if len(ragContextDocs) > 0 {
+			logger.Info("RAG content found, adding to the request", slog.Int("num_results", len(ragContextDocs)))
 		}
-	}
-
-	if ragFound {
-		// If found something, add the RAG generated ragPromptParts to the end of the history as a message
-		hist = append(hist, ai.NewUserMessage(ragPromptParts...))
 	}
 
 	userPromptParts := make([]*ai.Part, 0)
@@ -155,17 +138,23 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 	userPromptParts = append(userPromptParts, ai.NewTextPart(req.Message))
 	hist = append(hist, ai.NewUserMessage(userPromptParts...))
 
-	logger.Debug("message parts sending to LLM", slog.Any("parts", ragPromptParts))
+	logger.Debug("message parts sending to LLM", slog.Any("parts", userPromptParts))
 	// TODO: We could re-use a flow here maybe, but for simplicity we create a new generate just for each message. We can optimize later if needed.
 
-	resp, err := genkit.Generate(ctx, l.g,
-		// ai.WithPrompt(), // added to as messages
+	genOpts := []ai.GenerateOption{
 		ai.WithModel(l.model),
 		ai.WithSystem(l.persona),
 		ai.WithTools(l.toolRefs...),
 		ai.WithToolChoice(ai.ToolChoiceAuto),
 		ai.WithMessages(hist...),
-		ai.WithConfig(l.customConfig)) // It has a nil check internally
+		ai.WithConfig(l.customConfig), // It has a nil check internally
+	}
+
+	if len(ragContextDocs) > 0 {
+		genOpts = append(genOpts, ai.WithTextDocs(ragContextDocs...))
+	}
+
+	resp, err := genkit.Generate(ctx, l.g, genOpts...) // TODO: if we rewrite, make this smarter
 	if err != nil {
 		return "", err
 	}

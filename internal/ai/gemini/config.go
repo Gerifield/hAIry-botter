@@ -57,8 +57,12 @@ func CustomConfig(searchEnable bool) any {
 	}
 	// If the search is enabled, add this as a custom config, it is GEMINI ONLY!
 	if searchEnable {
+		ist := true
 		geminiSpecConfig.Tools = []*genai.Tool{
 			{GoogleSearch: &genai.GoogleSearch{}},
+		}
+		geminiSpecConfig.ToolConfig = &genai.ToolConfig{
+			IncludeServerSideToolInvocations: &ist,
 		}
 	}
 

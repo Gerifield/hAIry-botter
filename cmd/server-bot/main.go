@@ -99,11 +99,6 @@ func main() {
 	var searchEnable bool
 	searchEnabled := os.Getenv("SEARCH_ENABLE")
 	if searchEnabled == "true" || searchEnabled == "1" {
-		if len(mcpClientAddrs) != 0 {
-			logger.Error("MCP clients are not supported with search enabled, please remove MCP_SERVERS environment variable")
-
-			return
-		}
 		searchEnable = true
 	}
 

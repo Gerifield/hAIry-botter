@@ -100,6 +100,7 @@ func main() {
 	searchDisabled := os.Getenv("GEMINI_SEARCH_DISABLED")
 	if searchDisabled == "true" || searchDisabled == "1" {
 		searchEnable = false
+		logger.Info("Gemini search plugin is disabled")
 	}
 
 	// Initialize the Gemini AI logic

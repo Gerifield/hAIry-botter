@@ -127,7 +127,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 		}
 	}
 
-	userPromptParts := make([]*ai.Part, 0)
+	userPromptParts := make([]*ai.Part, 0, len(req.InlineData)+1)
 	for _, inlineData := range req.InlineData {
 		// If we have some inline data convert them to prompt parts
 		userPromptParts = append(userPromptParts, ai.NewMediaPart(inlineData.MimeType, string(inlineData.Data)))

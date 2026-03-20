@@ -9,6 +9,7 @@ require (
 	github.com/go-telegram/bot v1.17.0
 	github.com/mark3labs/mcp-go v0.29.1-0.20250521213157-f99e5472f312
 	github.com/philippgille/chromem-go v0.7.0
+	google.golang.org/genai v1.51.0
 )
 
 require (
@@ -51,7 +52,6 @@ require (
 	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/term v0.33.0 // indirect
 	golang.org/x/text v0.27.0 // indirect
-	google.golang.org/genai v1.51.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250603155806-513f23925822 // indirect
 	google.golang.org/grpc v1.73.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect

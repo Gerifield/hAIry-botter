@@ -1,0 +1,14 @@
+FROM golang:1.25 AS build
+
+WORKDIR /go/src/app
+COPY . .
+
+RUN go mod download
+RUN CGO_ENABLED=0 go build -o /go/bin/mcp-skill -ldflags '-w -s' cmd/server-mcp-skill/main.go cmd/server-mcp-skill/tools.go
+
+
+FROM gcr.io/distroless/static AS production
+WORKDIR /app
+COPY --from=build /go/bin/mcp-skill mcp-skill
+COPY --from=build /go/src/app/SKILL.md SKILL.md
+ENTRYPOINT ["./mcp-skill"]

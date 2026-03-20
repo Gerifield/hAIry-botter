@@ -67,9 +67,13 @@ You can configure the server using Environment Variables.
 
 | Variable | Description | Default | Required |
 | :--- | :--- | :--- | :---: |
-| `GEMINI_API_KEY` | Your Google Gemini API access key. | - | ✅ |
+| `AI_PROVIDER` | The AI provider to use (`gemini` or `openai`). | `gemini` | ❌ |
+| `GEMINI_API_KEY` | Your Google Gemini API access key (Always required for embedding). | - | ✅ |
 | `ADDR` | Server listen address. | `:8080` | ❌ |
 | `GEMINI_MODEL` | The specific model version to use. | `gemini-flash-latest` | ❌ |
+| `OPENAI_API_KEY` | Your OpenAI API access key (Required if `AI_PROVIDER` is `openai`). | - | ❌ |
+| `OPENAI_MODEL` | The specific OpenAI model to use. | `gpt-4o-mini` | ❌ |
+| `OPENAI_BASE_URL` | Base URL for OpenAI compatible APIs. | - | ❌ |
 | `MCP_SERVERS` | Comma-separated list of MCP HTTP stream servers (e.g., `http://localhost:8081/mcp`). | - | ❌ |
 | `GEMINI_SEARCH_DISABLED` | Set to `true` or `1` to disable Google Search grounding. Search is **enabled by default**. | `false` | ❌ |
 | `HISTORY_SUMMARY` | Message count trigger for history summarization (`0` to disable). | `20` | ❌ |

@@ -14,11 +14,13 @@ import (
 	"hairy-botter/internal/ai/agent"
 	"hairy-botter/internal/ai/gemini"
 	gemini_embedding "hairy-botter/internal/ai/gemini-embedding"
+	"hairy-botter/internal/ai/openai"
 	"hairy-botter/internal/history"
 	"hairy-botter/internal/rag"
 	"hairy-botter/internal/server"
 
 	"github.com/firebase/genkit/go/ai"
+	"github.com/firebase/genkit/go/core/api"
 	"github.com/firebase/genkit/go/genkit"
 )
 
@@ -104,17 +106,48 @@ func main() {
 		logger.Info("Gemini search plugin is disabled")
 	}
 
-	// Initialize the Gemini AI logic
-	ga := gemini.ConfigPlugin(geminiKey)
-	g := genkit.Init(context.Background(), genkit.WithPlugins(ga))
+	aiProvider := os.Getenv("AI_PROVIDER")
+	if aiProvider == "" {
+		aiProvider = "gemini"
+	}
 
-	model, err := gemini.ConfigModel(g, ga, os.Getenv("GEMINI_MODEL"))
+	plugins := make([]api.Plugin, 0)
+
+	// Initialize the Gemini AI logic (Always needed for embedding and summarization)
+	ga := gemini.ConfigPlugin(geminiKey)
+	plugins = append(plugins, ga)
+
+	var oai openai.AgentConfigurator
+	if aiProvider == "openai" {
+		oaiKey := os.Getenv("OPENAI_API_KEY")
+		if oaiKey == "" {
+			logger.Error("OPENAI_API_KEY is not set but AI_PROVIDER is openai")
+			return
+		}
+		oaiBaseURL := os.Getenv("OPENAI_BASE_URL")
+		oai = openai.ConfigPlugin(oaiKey, oaiBaseURL)
+		plugins = append(plugins, oai)
+	}
+
+	g := genkit.Init(context.Background(), genkit.WithPlugins(plugins...))
+
+	geminiModel, err := gemini.ConfigModel(g, ga, os.Getenv("GEMINI_MODEL"))
 	if err != nil {
-		logger.Error("failed to define model", slog.String("err", err.Error()))
+		logger.Error("failed to define Gemini model", slog.String("err", err.Error()))
 
 		return
 	}
-	customModelConfig := gemini.CustomConfig(searchEnable)
+
+	var activeModel ai.Model
+	var customModelConfig any
+
+	if aiProvider == "openai" {
+		activeModel = openai.ConfigModel(oai, os.Getenv("OPENAI_MODEL"))
+		customModelConfig = nil // No custom config for OpenAI for now
+	} else {
+		activeModel = geminiModel
+		customModelConfig = gemini.CustomConfig(searchEnable)
+	}
 
 	// TODO: Make a better, more separated embedder config
 	embedder, err := ga.DefineEmbedder(g, "gemini-embedding-001", &ai.EmbedderOptions{})
@@ -136,11 +169,11 @@ func main() {
 		HistorySummary: historySummary,
 		Summarizer: &genkitSummarizer{
 			g:     g,
-			model: model,
+			model: geminiModel,
 		},
 	})
 
-	aiLogic, err := agent.New(logger, g, model, hist, mcpClientAddrs, ragL, customModelConfig)
+	aiLogic, err := agent.New(logger, g, activeModel, hist, mcpClientAddrs, ragL, customModelConfig)
 	if err != nil {
 		logger.Error("failed to create AI logic", slog.String("err", err.Error()))
 

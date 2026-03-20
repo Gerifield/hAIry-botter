@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"hairy-botter/internal/ai/agent"
 	"hairy-botter/internal/ai/gemini"
@@ -165,7 +166,7 @@ func main() {
 	})
 
 	stopCh := make(chan os.Signal, 1)
-	signal.Notify(stopCh, os.Interrupt, os.Kill)
+	signal.Notify(stopCh, os.Interrupt, syscall.SIGTERM)
 	finishedCh := make(chan struct{}) // Signal the end of the graceful shutdown
 	go func() {
 		<-stopCh

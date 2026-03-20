@@ -150,9 +150,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 		ai.WithConfig(l.customConfig), // It has a nil check internally
 	}
 
-	if len(ragContextDocs) > 0 {
-		genOpts = append(genOpts, ai.WithDocs(ragContextDocs...))
-	}
+	genOpts = append(genOpts, ai.WithDocs(ragContextDocs...))
 
 	resp, err := genkit.Generate(ctx, l.g, genOpts...) // TODO: if we rewrite, make this smarter
 	if err != nil {

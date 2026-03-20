@@ -121,7 +121,7 @@ func (l *Logic) loadContent() error {
 		return err
 	})
 
-	l.embeddedDocs = id - 1 // Set the number of embedded documents
+	l.embeddedDocs = coll.Count() // Set the number of embedded documents
 
 	l.logger.Info("rag embedding done", slog.Int("num", l.embeddedDocs))
 

@@ -13,6 +13,7 @@ WORKDIR /app
 
 RUN apk --no-cache add ca-certificates
 RUN adduser -D -g '' agentuser
+RUN chown agentuser:agentuser /app
 
 COPY --from=build /go/bin/mcp-skill mcp-skill
 COPY --from=build /go/src/app/SKILL.md SKILL.md

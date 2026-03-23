@@ -186,8 +186,31 @@ History files are stored in the `history-gemini/` folder as JSON. After the migr
 
 ---
 
+## 🛠️ Skills MCP Server
+
+The repo includes a dedicated MCP (Model Context Protocol) server designed to give the AI agent autonomous access to a sandboxed environment. This allows the AI to run commands, edit code, and modify files—similar to how tools like OpenDevin or OpenClaw work.
+
+**Features & Tools:**
+- `execute_command`: Execute arbitrary shell commands in the container.
+- `list_files`: List files and directories within a given path.
+- `read_file`: Read the contents of a specific file.
+- `write_file`: Write or overwrite the contents of a file.
+
+**Running the Skills Server:**
+To run the full stack with the Skills MCP Server enabled, use the dedicated compose file:
+
+```bash
+docker-compose -f docker-compose-skill.yml up
+```
+
+**Docker Environment:**
+The Skills MCP Server runs in an Alpine Linux Docker container. This means the AI has access to a real shell and can use package managers like `apk` to install additional applications dynamically if it needs them to accomplish a task.
+*(Note: Since it is a container, installed applications and environment changes are not persistent between restarts unless explicitly mounted).*
+
+---
+
 ## ⚠️ Important Notes
 
-> **Security Warning:** Please do not run this server on the public internet without additional authentication. It is intended as an internal helper tool. Public exposure could lead to excessive API usage and costs.
+> **Security Warning:** Please do not run this server on the public internet without additional authentication. It is intended as an internal helper tool. Public exposure could lead to excessive API usage and costs. Furthermore, running the **Skills MCP Server** gives the AI the ability to execute arbitrary shell commands inside its container. Do not expose this environment or grant it access to sensitive host directories.
 
-> **💡 Pro Tip:** If you add a **Shell MCP server**, you can add "OpenClaw skills" into the RAG processing folder. These "skills" are text files that become part of the prompt, allowing the AI to execute shell-based function calls!
+> **💡 Pro Tip:** When using the **Skills MCP Server**, you can drop text files explaining specific "skills" or commands into the RAG `bot-context/` folder. These files become part of the prompt, teaching the AI exactly how to use specific CLI tools or project structures!

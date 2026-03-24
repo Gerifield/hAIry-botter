@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -37,13 +38,39 @@ func getClient(config *oauth2.Config) *http.Client {
 
 // Request a token from the web, then returns the retrieved token.
 func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
-	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
-	fmt.Printf("Go to the following link in your browser then type the "+
-		"authorization code: \n%v\n", authURL)
+	// Start a local web server to catch the callback
+	codeCh := make(chan string)
+	mux := http.NewServeMux()
+	srv := &http.Server{Addr: "localhost:9099", Handler: mux}
 
-	var authCode string
-	if _, err := fmt.Scan(&authCode); err != nil {
-		log.Fatalf("Unable to read authorization code: %v", err)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		code := r.URL.Query().Get("code")
+		if code != "" {
+			fmt.Fprintf(w, "Authorization successful! You can close this window and return to the terminal.")
+			codeCh <- code
+		} else {
+			fmt.Fprintf(w, "Error: No code found in request.")
+		}
+	})
+
+	go func() {
+		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("HTTP server ListenAndServe: %v", err)
+		}
+	}()
+
+	// Ensure the redirect URL is set to our local server
+	config.RedirectURL = "http://localhost:9099/"
+
+	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
+	fmt.Printf("Go to the following link in your browser to authorize:\n%v\n\nWaiting for authorization...\n", authURL)
+
+	// Wait for the code
+	authCode := <-codeCh
+
+	// Shutdown the server gracefully
+	if err := srv.Shutdown(context.Background()); err != nil {
+		log.Printf("HTTP server Shutdown: %v", err)
 	}
 
 	tok, err := config.Exchange(context.Background(), authCode)
@@ -86,7 +113,7 @@ type Configuration struct {
 func loadConfig() Configuration {
 	cfg := Configuration{
 		WebhookURL:      "http://localhost:8080/webhook",
-		SearchQuery:     "label:Assistant is:unread",
+		SearchQuery:     "(label:Assistant OR to:gergo254+assistant@gmail.com) is:unread",
 		PollingInterval: 60 * time.Second,
 	}
 

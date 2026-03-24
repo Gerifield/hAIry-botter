@@ -47,6 +47,20 @@ func ConfigModel(g *genkit.Genkit, ga modelDefiner, modelName string) (ai.Model,
 	return model, nil
 }
 
+// ConfigEmbedder .
+func ConfigEmbedder(g *genkit.Genkit, ga modelEmbedder, modelName string) (ai.Embedder, error) {
+	if modelName == "" {
+		modelName = "gemini-embedding-001"
+	}
+
+	embedder, err := ga.DefineEmbedder(g, modelName, &ai.EmbedderOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return embedder, nil
+}
+
 // CustomConfig .
 func CustomConfig(searchEnable bool) any {
 	geminiSpecConfig := &genai.GenerateContentConfig{

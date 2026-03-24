@@ -116,8 +116,7 @@ func main() {
 	}
 	customModelConfig := gemini.CustomConfig(searchEnable)
 
-	// TODO: Make a better, more separated embedder config
-	embedder, err := ga.DefineEmbedder(g, "gemini-embedding-001", &ai.EmbedderOptions{})
+	embedder, err := gemini.ConfigEmbedder(g, ga, "gemini-embedding-001")
 	if err != nil {
 		logger.Error("failed to define embedder", slog.String("err", err.Error()))
 

@@ -86,7 +86,7 @@ type Configuration struct {
 func loadConfig() Configuration {
 	cfg := Configuration{
 		WebhookURL:      "http://localhost:8080/webhook",
-		SearchQuery:     "label:Assistantis:unread",
+		SearchQuery:     "label:Assistant is:unread",
 		PollingInterval: 60 * time.Second,
 	}
 

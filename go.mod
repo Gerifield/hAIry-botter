@@ -9,12 +9,15 @@ require (
 	github.com/go-telegram/bot v1.17.0
 	github.com/mark3labs/mcp-go v0.29.1-0.20250521213157-f99e5472f312
 	github.com/philippgille/chromem-go v0.7.0
+	golang.org/x/oauth2 v0.30.0
+	google.golang.org/api v0.236.0
 	google.golang.org/genai v1.51.0
 )
 
 require (
 	cloud.google.com/go v0.120.0 // indirect
 	cloud.google.com/go/auth v0.16.2 // indirect
+	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.7.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect

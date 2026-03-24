@@ -10,6 +10,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/firebase/genkit/go/ai"
 	"github.com/philippgille/chromem-go"
 )
 
@@ -120,20 +121,36 @@ func (l *Logic) loadContent() error {
 		return err
 	})
 
-	l.embeddedDocs = id - 1 // Set the number of embedded documents
+	l.embeddedDocs = coll.Count() // Set the number of embedded documents
 
 	l.logger.Info("rag embedding done", slog.Int("num", l.embeddedDocs))
 
 	return err
 }
 
-func (l *Logic) Query(ctx context.Context, query string, limit int) ([]chromem.Result, error) {
-	l.logger.Info("rag query", slog.String("query", query), slog.Int("limit", limit))
+func (l *Logic) Retrieve(ctx context.Context, req *ai.RetrieverRequest) (*ai.RetrieverResponse, error) {
+	queryText := ""
+	if req.Query != nil && len(req.Query.Content) > 0 && req.Query.Content[0].IsText() {
+		queryText = req.Query.Content[0].Text
+	}
+
+	limit := 3 // default limit
+	if req.Options != nil {
+		if optsMap, ok := req.Options.(map[string]any); ok {
+			if lVal, ok := optsMap["limit"].(float64); ok {
+				limit = int(lVal)
+			} else if lVal, ok := optsMap["limit"].(int); ok {
+				limit = lVal
+			}
+		}
+	}
+
+	l.logger.Info("rag retrieve", slog.String("query", queryText), slog.Int("limit", limit))
 
 	if l.embeddedDocs == 0 { // No embedded documents available, ignore the query
-		l.logger.Warn("rag query called without any embedded documents", slog.String("query", query), slog.Int("limit", limit))
+		l.logger.Warn("rag retrieve called without any embedded documents", slog.String("query", queryText), slog.Int("limit", limit))
 
-		return make([]chromem.Result, 0), nil
+		return &ai.RetrieverResponse{Documents: make([]*ai.Document, 0)}, nil
 	}
 
 	// Make sure we don't query more than we have embedded
@@ -142,14 +159,65 @@ func (l *Logic) Query(ctx context.Context, query string, limit int) ([]chromem.R
 	}
 
 	coll := l.db.GetCollection(collectionKey, nil)
-	res, err := coll.Query(ctx, query, limit, nil, nil)
+	res, err := coll.Query(ctx, queryText, limit, nil, nil)
 	if err != nil {
-		l.logger.Error("failed to query rag content", slog.String("query", query), slog.Int("limit", limit), slog.String("error", err.Error()))
+		l.logger.Error("failed to query rag content", slog.String("query", queryText), slog.Int("limit", limit), slog.String("error", err.Error()))
 
 		return nil, err
 	}
 
-	l.logger.Info("rag query done", slog.Int("num_results", len(res)))
+	l.logger.Info("rag retrieve done", slog.Int("num_results", len(res)))
 
-	return res, nil
+	docs := make([]*ai.Document, 0, len(res))
+	for _, r := range res {
+		doc := ai.DocumentFromText(r.Content, map[string]any{
+			"similarity": r.Similarity,
+			"id":         r.ID,
+		})
+		docs = append(docs, doc)
+	}
+
+	return &ai.RetrieverResponse{
+		Documents: docs,
+	}, nil
+}
+
+func (l *Logic) Evaluate(ctx context.Context, req *ai.EvaluatorRequest) (*ai.EvaluatorResponse, error) {
+	var results ai.EvaluatorResponse
+	for _, example := range req.Dataset {
+		queryText := ""
+		if inputStr, ok := example.Input.(string); ok {
+			queryText = inputStr
+		} else if inputDoc, ok := example.Input.(*ai.Document); ok && len(inputDoc.Content) > 0 && inputDoc.Content[0].IsText() {
+			queryText = inputDoc.Content[0].Text
+		}
+
+		coll := l.db.GetCollection(collectionKey, nil)
+		res, err := coll.Query(ctx, queryText, 1, nil, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		var similarity float32 = 0
+		if len(res) > 0 {
+			similarity = res[0].Similarity
+		}
+
+		results = append(results, ai.EvaluationResult{
+			TestCaseId: example.TestCaseId,
+			Evaluation: []ai.Score{{
+				Score: similarity,
+			}},
+		})
+	}
+
+	return &results, nil
+}
+
+func (l *Logic) Name() string {
+	return "hairy-botter-rag"
+}
+
+func (l *Logic) Register(r any) {
+	// Only needed if we want to dynamically register this via Genkit init, but we construct manually.
 }

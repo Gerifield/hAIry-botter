@@ -9,16 +9,17 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 
-	"github.com/mark3labs/mcp-go/client"
-	"github.com/mark3labs/mcp-go/client/transport"
-	"google.golang.org/genai"
-
+	"hairy-botter/internal/ai/agent"
 	"hairy-botter/internal/ai/gemini"
 	gemini_embedding "hairy-botter/internal/ai/gemini-embedding"
 	"hairy-botter/internal/history"
 	"hairy-botter/internal/rag"
 	"hairy-botter/internal/server"
+
+	"github.com/firebase/genkit/go/ai"
+	"github.com/firebase/genkit/go/genkit"
 )
 
 func logLevelEnv() slog.Level {
@@ -35,6 +36,24 @@ func logLevelEnv() slog.Level {
 	default:
 		return slog.LevelInfo
 	}
+}
+
+// genkitSummarizer implements history.Summarizer using the genkit framework.
+type genkitSummarizer struct {
+	g     *genkit.Genkit
+	model ai.Model
+}
+
+func (s *genkitSummarizer) Summarize(ctx context.Context, systemPrompt, text string) (string, error) {
+	resp, err := genkit.Generate(ctx, s.g,
+		ai.WithModel(s.model),
+		ai.WithSystem(systemPrompt),
+		ai.WithMessages(ai.NewUserTextMessage(text)),
+	)
+	if err != nil {
+		return "", err
+	}
+	return resp.Text(), nil
 }
 
 func main() {
@@ -55,11 +74,6 @@ func main() {
 		return
 	}
 
-	geminiModel := os.Getenv("GEMINI_MODEL")
-	if geminiModel == "" {
-		geminiModel = "gemini-flash-latest" // Always use the latest flash model by default
-	}
-
 	historySummaryEnv := os.Getenv("HISTORY_SUMMARY")
 	historySummary := 20 // Default to 20
 	if historySummaryEnv != "" {
@@ -72,62 +86,45 @@ func main() {
 		historySummary = int(p)
 	}
 
-	mcpClients := make([]*client.Client, 0)
 	mcpServer := os.Getenv("MCP_SERVERS")
+	mcpClientAddrs := make([]string, 0)
 	if mcpServer != "" {
 		// Parse the MCP server list
 		servers := strings.Split(mcpServer, ",")
 		for _, s := range servers {
 			s = strings.TrimSpace(s)
-
-			logger.Info("init Streamable HTTP MCP server", slog.String("server", mcpServer))
-			streamableTransport, err := transport.NewStreamableHTTP(mcpServer, transport.WithHTTPHeaderFunc(func(ctx context.Context) map[string]string {
-				res := make(map[string]string)
-				if u := ctx.Value("x-session-id"); u != nil {
-					res["x-session-id"] = u.(string)
-				}
-
-				return res
-			}))
-			if err != nil {
-				logger.Error("failed to create Streamable HTTP transport", slog.String("err", err.Error()))
-
-				return
-			}
-
-			if err = streamableTransport.Start(context.Background()); err != nil {
-				logger.Error("failed to start Streamable HTTP transport", slog.String("err", err.Error()))
-
-				return
-			}
-
-			mcpClients = append(mcpClients, client.NewClient(streamableTransport))
+			mcpClientAddrs = append(mcpClientAddrs, s)
 		}
 	}
 
-	var searchEnable bool
-	searchEnabled := os.Getenv("SEARCH_ENABLE")
-	if searchEnabled == "true" || searchEnabled == "1" {
-		if len(mcpClients) != 0 {
-			logger.Error("MCP clients are not supported with search enabled, please remove MCP_SERVERS environment variable")
-
-			return
-		}
-		searchEnable = true
+	searchEnable := true
+	searchDisabled := os.Getenv("GEMINI_SEARCH_DISABLED")
+	if searchDisabled == "true" || searchDisabled == "1" {
+		searchEnable = false
+		logger.Info("Gemini search plugin is disabled")
 	}
 
-	// Initialize the AI logic
-	aiClient, err := genai.NewClient(context.Background(), &genai.ClientConfig{
-		APIKey:  geminiKey,
-		Backend: genai.BackendGeminiAPI,
-	})
+	// Initialize the Gemini AI logic
+	ga := gemini.ConfigPlugin(geminiKey)
+	g := genkit.Init(context.Background(), genkit.WithPlugins(ga))
+
+	model, err := gemini.ConfigModel(g, ga, os.Getenv("GEMINI_MODEL"))
 	if err != nil {
-		logger.Error("failed to create genai client", slog.String("err", err.Error()))
+		logger.Error("failed to define model", slog.String("err", err.Error()))
+
+		return
+	}
+	customModelConfig := gemini.CustomConfig(searchEnable)
+
+	// TODO: Make a better, more separated embedder config
+	embedder, err := ga.DefineEmbedder(g, "gemini-embedding-001", &ai.EmbedderOptions{})
+	if err != nil {
+		logger.Error("failed to define embedder", slog.String("err", err.Error()))
 
 		return
 	}
 
-	ragEmbedder := gemini_embedding.GeminiEmbeddingFunc(aiClient, "gemini-embedding-001")
+	ragEmbedder := gemini_embedding.EmbeddingFunc(g, embedder)
 	ragL, err := rag.New(logger, "bot-context/", ragEmbedder)
 	if err != nil {
 		logger.Error("failed to create RAG logic", slog.String("err", err.Error()))
@@ -136,15 +133,16 @@ func main() {
 	}
 
 	hist := history.New(logger, "history-gemini/", history.Config{
-		HistorySummary:  historySummary,
-		Summarizer:      aiClient,
-		SummarizerModel: geminiModel,
+		HistorySummary: historySummary,
+		Summarizer: &genkitSummarizer{
+			g:     g,
+			model: model,
+		},
 	})
 
-	aiLogic, err := gemini.New(logger, aiClient, geminiModel, hist, mcpClients, ragL, searchEnable)
-
+	aiLogic, err := agent.New(logger, g, model, hist, mcpClientAddrs, ragL, customModelConfig)
 	if err != nil {
-		logger.Error("failed to create gemini logic", slog.String("err", err.Error()))
+		logger.Error("failed to create AI logic", slog.String("err", err.Error()))
 
 		return
 	}
@@ -169,7 +167,7 @@ func main() {
 	})
 
 	stopCh := make(chan os.Signal, 1)
-	signal.Notify(stopCh, os.Interrupt, os.Kill)
+	signal.Notify(stopCh, os.Interrupt, syscall.SIGTERM)
 	finishedCh := make(chan struct{}) // Signal the end of the graceful shutdown
 	go func() {
 		<-stopCh

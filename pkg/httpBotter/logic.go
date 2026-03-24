@@ -40,7 +40,7 @@ func (l *Logic) Send(userID string, msg string, payloads [][]byte) (string, erro
 			continue
 		}
 		h := make(textproto.MIMEHeader)
-		h.Set("Content-Disposition", multipart.FileContentDisposition("payload", fmt.Sprintf("payload-%d.data", i)))
+		h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="payload"; filename="payload-%d.data"`, i))
 		h.Set("Content-Type", http.DetectContentType(payload))
 		part, err := mpw.CreatePart(h)
 		if err != nil {

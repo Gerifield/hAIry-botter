@@ -11,16 +11,19 @@ import (
 	"path/filepath"
 	"strings"
 
-	"google.golang.org/genai"
+	"github.com/firebase/genkit/go/ai"
 )
 
-var summarySystemPrompt = &genai.Content{Role: "user", Parts: []*genai.Part{{Text: "You are a summarization AI. Your task is to summarize the conversation history into a single message. Extract all the most important information related to the client like name, phone number and other parameters. It is possible that the model response contains user related information. Only respond with the summarization and keep it short just keep the most important information."}}}
+var summarySystemPrompt = "You are a summarization AI. Your task is to summarize the conversation history into a single message. Extract all the most important information related to the client like name, phone number and other parameters. It is possible that the model response contains user related information. Only respond with the summarization and keep it short just keep the most important information."
 var summeryUserTemplate = "The current history which should be summarized is:\n\n%s"
 
+type Summarizer interface {
+	Summarize(ctx context.Context, systemPrompt, text string) (string, error)
+}
+
 type Config struct {
-	HistorySummary  int           // How many history items to summarize into a single one, 0 means disabled, history contains both user and model messages
-	Summarizer      *genai.Client // TODO: We could change this to an interface to decouple from genai package, but let'go for simplicity first
-	SummarizerModel string        // Model to use for summarization
+	HistorySummary int // How many history items to summarize into a single one, 0 means disabled, history contains both user and model messages
+	Summarizer     Summarizer
 }
 
 // Logic .
@@ -40,11 +43,11 @@ func New(logger *slog.Logger, historyPath string, config Config) *Logic {
 }
 
 type saveFormat struct {
-	History []*genai.Content `json:"history"`
+	History []*ai.Message `json:"history"`
 }
 
 // Read .
-func (l *Logic) Read(ctx context.Context, sessionID string) ([]*genai.Content, error) {
+func (l *Logic) Read(ctx context.Context, sessionID string) ([]*ai.Message, error) {
 	trimmedID := strings.TrimSpace(sessionID)
 	if trimmedID == "" || trimmedID == "." ||
 		strings.Contains(trimmedID, "/") || strings.Contains(trimmedID, "\\") || strings.Contains(trimmedID, "..") {
@@ -54,7 +57,7 @@ func (l *Logic) Read(ctx context.Context, sessionID string) ([]*genai.Content, e
 	b, err := os.ReadFile(filepath.Join(l.historyPath, filepath.Base(trimmedID)))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) { // Not yet exists, ignore
-			return make([]*genai.Content, 0), nil
+			return make([]*ai.Message, 0), nil
 		}
 		return nil, err
 	}
@@ -69,7 +72,7 @@ func (l *Logic) Read(ctx context.Context, sessionID string) ([]*genai.Content, e
 }
 
 // Save .
-func (l *Logic) Save(ctx context.Context, sessionID string, history []*genai.Content) error {
+func (l *Logic) Save(ctx context.Context, sessionID string, history []*ai.Message) error {
 	if strings.Contains(sessionID, "/") || strings.Contains(sessionID, "\\") || strings.Contains(sessionID, "..") {
 		return errors.New("invalid sessionID")
 	}
@@ -84,7 +87,7 @@ func (l *Logic) Save(ctx context.Context, sessionID string, history []*genai.Con
 			return fmt.Errorf("failed to summarize history: %w", err)
 		}
 
-		b, err = json.Marshal(saveFormat{History: []*genai.Content{summary}})
+		b, err = json.Marshal(saveFormat{History: []*ai.Message{summary}})
 		if err != nil {
 			return err
 		}
@@ -99,7 +102,7 @@ func (l *Logic) Save(ctx context.Context, sessionID string, history []*genai.Con
 	return os.WriteFile(filepath.Join(l.historyPath, filepath.Base(sessionID)), b, 0644)
 }
 
-func (l *Logic) summarize(ctx context.Context, history []*genai.Content) (*genai.Content, error) {
+func (l *Logic) summarize(ctx context.Context, history []*ai.Message) (*ai.Message, error) {
 	if l.config.HistorySummary == 0 {
 		return nil, errors.New("history summarization is disabled")
 	}
@@ -108,34 +111,27 @@ func (l *Logic) summarize(ctx context.Context, history []*genai.Content) (*genai
 		return nil, errors.New("summarizer is not configured")
 	}
 
-	if l.config.SummarizerModel == "" {
-		return nil, errors.New("summarizer model is not configured")
-	}
-
 	historyContent := fmt.Sprintf(summeryUserTemplate, contentToString(history))
 
-	resp, err := l.config.Summarizer.Models.GenerateContent(ctx, l.config.SummarizerModel, genai.Text(historyContent), &genai.GenerateContentConfig{
-		SystemInstruction: summarySystemPrompt,
-	})
+	summary, err := l.config.Summarizer.Summarize(ctx, summarySystemPrompt, historyContent)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate summary: %w", err)
 	}
 
-	return &genai.Content{
-		Role:  "model",
-		Parts: []*genai.Part{{Text: fmt.Sprintf("Summarized history:\n\n%s", resp.Text())}},
-	}, nil
+	return ai.NewModelTextMessage(fmt.Sprintf("Summarized history:\n\n%s", summary)), nil
 }
 
-func contentToString(history []*genai.Content) string {
+func contentToString(history []*ai.Message) string {
 	var sb strings.Builder
-	for _, c := range history {
-		for _, p := range c.Parts {
-			sb.WriteString("Role: ")
-			sb.WriteString(c.Role)
-			sb.WriteString(", Text:")
-			sb.WriteString(p.Text)
-			sb.WriteByte('\n')
+	for _, h := range history {
+		for _, p := range h.Content {
+			if p.IsText() {
+				sb.WriteString("Role: ")
+				sb.WriteString(string(h.Role))
+				sb.WriteString(", Text:")
+				sb.WriteString(p.Text)
+				sb.WriteByte('\n')
+			}
 		}
 	}
 

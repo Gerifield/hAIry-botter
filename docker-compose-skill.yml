@@ -1,18 +1,33 @@
 # docker-compose.yml
 version: '3.4'
 services:
+  mcp-skill:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: docker/Dockerfile-mcp-skill
+      target: production
+    environment:
+      PORT: 8090
+    ports:
+      - "8090:8090"
+
   bot:
     restart: unless-stopped
     build:
       context: .
       dockerfile: docker/Dockerfile-bot
       target: production
+    environment:
+      MCP_SERVERS: http://mcp-skill:8090/mcp
     env_file:
       - .env
     ports:
       - "8080:8080"
     volumes:
       - bot-data:/app
+    depends_on:
+      - mcp-skill
 
   client-telegram:
     restart: unless-stopped

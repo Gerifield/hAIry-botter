@@ -4,7 +4,7 @@
 
 # hAIry Botter 🪄 ✨
 
-**A flexible, HTTP-based AI Chatbot Server powered by Gemini via Firebase Genkit.**
+**A flexible, HTTP-based AI Chatbot Server powered by Gemini.**
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/yourusername/hairy-botter)](https://goreportcard.com/report/github.com/yourusername/hairy-botter)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -22,11 +22,11 @@ Whether you are building a CLI, a Telegram bot, or a web interface, you just nee
 
 ## ✨ Features
 
-* 🧠 **Genkit Powered:** Uses [Firebase Genkit](https://firebase.google.com/docs/genkit) as the AI framework, backed by Google Gemini models. Swapping providers (Vertex AI, Ollama, etc.) requires only a plugin change.
-* 🔌 **MCP Support:** Implements the **Model Context Protocol** to call external servers/functions via Genkit's MCP plugin (includes example implementation).
+* 🧠 **Gemini Powered:** Uses the latest Google Gemini models.
+* 🔌 **MCP Support:** Implements the **Model Context Protocol** to call external servers/functions (includes example implementation).
 * 💾 **Smart History:** Session-based history storage (`history-gemini` folder) with optional auto-summarization to save context window.
 * 📚 **RAG Capable:** Built-in Retrieval-Augmented Generation. Drop text documents into the `bot-context` folder to chat with your data.
-* 🎭 **Custom Personality:** Configurable system prompt via `personality.txt`.
+* 🎭 **Custom Personality:** Configurable base prompts via `personality.json`.
 * 🖼️ **Multi-modal:** Native support for Image and PDF inputs.
 * 🚀 **Ready-to-use Clients:** Includes CLI, Telegram, and Facebook Messenger clients.
 
@@ -56,7 +56,7 @@ docker-compose up
     ```
 2.  Run the server:
     ```bash
-    go run cmd/server-bot/main.go
+    go run cmd/bot-server/main.go
     ```
 
 ---
@@ -69,18 +69,13 @@ You can configure the server using Environment Variables.
 | :--- | :--- | :--- | :---: |
 | `GEMINI_API_KEY` | Your Google Gemini API access key. | - | ✅ |
 | `ADDR` | Server listen address. | `:8080` | ❌ |
-| `GEMINI_MODEL` | The specific model version to use. | `gemini-flash-latest` | ❌ |
+| `GEMINI_MODEL` | The specific model version to use. | `gemini-2.5-flash` | ❌ |
 | `MCP_SERVERS` | Comma-separated list of MCP HTTP stream servers (e.g., `http://localhost:8081/mcp`). | - | ❌ |
-| `GEMINI_SEARCH_DISABLED` | Set to `true` or `1` to disable Google Search grounding. Search is **enabled by default**. | `false` | ❌ |
+| `SEARCH_ENABLE` | Allow Google Search (Warning: conflicts with MCP). | `false` | ❌ |
 | `HISTORY_SUMMARY` | Message count trigger for history summarization (`0` to disable). | `20` | ❌ |
 | `LOG_LEVEL` | Logging verbosity (`debug`, `info`, `warn`, `error`). | `info` | ❌ |
-| `CORS_ALLOWED_ORIGIN` | CORS allowed origin header. | `*` | ❌ |
-| `CORS_ALLOWED_METHODS` | CORS allowed methods header. | `POST, OPTIONS` | ❌ |
-| `CORS_ALLOWED_HEADERS` | CORS allowed headers header. | `Content-Type, X-User-ID` | ❌ |
 
 > **Note on MCP:** You cannot use the same function name across different MCP servers. Since functions are mapped to clients, duplicate names will override previous ones.
-
-> **Note on Search + MCP:** Google Search grounding and MCP tools can now be used **simultaneously**. On Gemini 3.0 models, both are active at the same time — the model can call your MCP tools and ground responses in live search results within the same conversation. To opt out of search, set `GEMINI_SEARCH_DISABLED=true`.
 
 ---
 
@@ -92,7 +87,7 @@ The server exposes a simple HTTP endpoint.
 If you don't provide a User ID, the server generates a new session and returns it in a cookie.
 
 ```bash
-curl -v -X POST http://127.0.0.1:8080/message \
+curl -v -X POST [http://127.0.0.1:8080/message](http://127.0.0.1:8080/message) \
   -d "message=Hi there"
 ```
 
@@ -102,7 +97,7 @@ To maintain history, pass the `sessionID` cookie returned from the first call.
 ```bash
 curl -v -X POST \
   -H "Cookie: sessionID=MGVQOSOZWPMKWAJBQN5KWFR3DF" \
-  http://127.0.0.1:8080/message \
+  [http://127.0.0.1:8080/message](http://127.0.0.1:8080/message) \
   -d "message=Hi again"
 ```
 
@@ -112,7 +107,7 @@ If your frontend manages users, pass the ID via header.
 ```bash
 curl -v -X POST \
   -H "X-User-ID: unique-user-123" \
-  http://127.0.0.1:8080/message \
+  [http://127.0.0.1:8080/message](http://127.0.0.1:8080/message) \
   -d "message=Hi there"
 ```
 
@@ -123,7 +118,7 @@ Send files using `multipart/form-data`.
 curl -v -X POST \
   -F "message=What is on this image?" \
   -F "payload=@local_image.jpg" \
-  http://127.0.0.1:8080/message
+  [http://127.0.0.1:8080/message](http://127.0.0.1:8080/message)
 ```
 
 ---
@@ -137,7 +132,7 @@ An interactive terminal chat.
 
 ```bash
 # Optional: Set SERVER_URL if not using localhost:8080
-go run cmd/client-cli/main.go
+go run cmd/cli-client/main.go
 ```
 ![cli-client](examples/client-cli-demo.svg)
 
@@ -162,55 +157,14 @@ Requires a configured Facebook App/Page.
 * `AI_SERVICE` (Default: `http://127.0.0.1:8080`)
 
 ```bash
-go run cmd/client-fb-messenger/main.go
+go run cmd/client-messenger/main.go
 ```
 *Tip: Use `ngrok http 8082` to expose this to Facebook for local testing.*
 
 ---
 
-## 🎭 Personality
-
-The bot's system prompt is loaded from a `personality.txt` file in the working directory. It is plain text — just write your system prompt directly, no JSON wrapping needed.
-
-```
-You are a helpful assistant named hAIry. Be concise and friendly.
-```
-
-> **Note:** Previous versions used `personality.json` with a JSON structure. This file must be migrated to plain text.
-
----
-
-## 💾 History Compatibility
-
-History files are stored in the `history-gemini/` folder as JSON. After the migration from the raw `genai` SDK to Firebase Genkit, the internal message format changed (`parts` → `content`). **Old history files are not compatible** and should be deleted or the folder cleared before upgrading.
-
----
-
-## 🛠️ Skills MCP Server
-
-The repo includes a dedicated MCP (Model Context Protocol) server designed to give the AI agent autonomous access to a sandboxed environment. This allows the AI to run commands, edit code, and modify files—similar to how tools like OpenDevin or OpenClaw work.
-
-**Features & Tools:**
-- `execute_command`: Execute arbitrary shell commands in the container.
-- `list_files`: List files and directories within a given path.
-- `read_file`: Read the contents of a specific file.
-- `write_file`: Write or overwrite the contents of a file.
-
-**Running the Skills Server:**
-To run the full stack with the Skills MCP Server enabled, use the dedicated compose file:
-
-```bash
-docker-compose -f docker-compose-skill.yml up
-```
-
-**Docker Environment:**
-The Skills MCP Server runs in an Alpine Linux Docker container. This means the AI has access to a real shell and can use package managers like `apk` to install additional applications dynamically if it needs them to accomplish a task.
-*(Note: Since it is a container, installed applications and environment changes are not persistent between restarts unless explicitly mounted).*
-
----
-
 ## ⚠️ Important Notes
 
-> **Security Warning:** Please do not run this server on the public internet without additional authentication. It is intended as an internal helper tool. Public exposure could lead to excessive API usage and costs. Furthermore, running the **Skills MCP Server** gives the AI the ability to execute arbitrary shell commands inside its container. Do not expose this environment or grant it access to sensitive host directories.
+> **Security Warning:** Please do not run this server on the public internet without additional authentication. It is intended as an internal helper tool. Public exposure could lead to excessive API usage and costs.
 
-> **💡 Pro Tip:** When using the **Skills MCP Server**, you can drop text files explaining specific "skills" or commands into the RAG `bot-context/` folder. These files become part of the prompt, teaching the AI exactly how to use specific CLI tools or project structures!
+> **💡 Pro Tip:** If you add a **Shell MCP server**, you can add "OpenClaw skills" into the RAG processing folder. These "skills" are text files that become part of the prompt, allowing the AI to execute shell-based function calls!

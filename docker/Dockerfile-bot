@@ -12,5 +12,5 @@ WORKDIR /app
 COPY --from=build /go/bin/server-bot server-bot
 COPY --from=build /go/src/app/history-gemini history-gemini
 COPY --from=build /go/src/app/bot-context bot-context
-COPY --from=build /go/src/app/personality.txt personality.txt
+COPY --from=build /go/src/app/personality.json personality.json
 ENTRYPOINT ["./server-bot"]

@@ -4,22 +4,26 @@ import (
 	"context"
 	"errors"
 
-	"github.com/firebase/genkit/go/ai"
-	"github.com/firebase/genkit/go/genkit"
 	"github.com/philippgille/chromem-go"
+	"google.golang.org/genai"
 )
 
-// EmbeddingFunc .
-func EmbeddingFunc(g *genkit.Genkit, embedder ai.Embedder) chromem.EmbeddingFunc {
+// GeminiEmbeddingFunc .
+func GeminiEmbeddingFunc(aiClient *genai.Client, embeddingModel string) chromem.EmbeddingFunc {
 	return func(ctx context.Context, text string) ([]float32, error) {
-		resp, err := genkit.Embed(ctx, g, ai.WithEmbedder(embedder), ai.WithTextDocs(text))
+		contents := []*genai.Content{
+			genai.NewContentFromText(text, genai.RoleUser),
+		}
+		res, err := aiClient.Models.EmbedContent(ctx, embeddingModel, contents, &genai.EmbedContentConfig{
+			TaskType: "RETRIEVAL_QUERY",
+		})
 		if err != nil {
 			return nil, err
 		}
-		if len(resp.Embeddings) == 0 {
+		if len(res.Embeddings) == 0 {
 			return nil, errors.New("no embeddings returned")
 		}
 
-		return resp.Embeddings[0].Embedding, nil
+		return res.Embeddings[0].Values, nil
 	}
 }

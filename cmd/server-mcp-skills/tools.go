@@ -15,6 +15,10 @@ import (
 // ensureSafePath checks if the given path is within the base directory.
 // It returns the absolute safe path or an error if the path traverses outside the base directory.
 func ensureSafePath(baseDir, reqPath string) (string, error) {
+	if filepath.IsAbs(reqPath) {
+		return "", fmt.Errorf("path traversal attempt detected: absolute path: %s", reqPath)
+	}
+
 	absBase, err := filepath.Abs(baseDir)
 	if err != nil {
 		return "", fmt.Errorf("failed to get absolute base directory: %w", err)

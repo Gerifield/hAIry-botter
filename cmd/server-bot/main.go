@@ -13,12 +13,12 @@ import (
 
 	"hairy-botter/internal/ai/agent"
 	"hairy-botter/internal/ai/gemini"
-	gemini_embedding "hairy-botter/internal/ai/gemini-embedding"
+	genkit_embedding "hairy-botter/internal/ai/genkit-embedding"
+	genkit_summarizer "hairy-botter/internal/ai/genkit-summarizer"
 	"hairy-botter/internal/history"
 	"hairy-botter/internal/rag"
 	"hairy-botter/internal/server"
 
-	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
 )
 
@@ -38,23 +38,6 @@ func logLevelEnv() slog.Level {
 	}
 }
 
-// genkitSummarizer implements history.Summarizer using the genkit framework.
-type genkitSummarizer struct {
-	g     *genkit.Genkit
-	model ai.Model
-}
-
-func (s *genkitSummarizer) Summarize(ctx context.Context, systemPrompt, text string) (string, error) {
-	resp, err := genkit.Generate(ctx, s.g,
-		ai.WithModel(s.model),
-		ai.WithSystem(systemPrompt),
-		ai.WithMessages(ai.NewUserTextMessage(text)),
-	)
-	if err != nil {
-		return "", err
-	}
-	return resp.Text(), nil
-}
 
 func main() {
 
@@ -123,8 +106,7 @@ func main() {
 		return
 	}
 
-	ragEmbedder := gemini_embedding.EmbeddingFunc(g, embedder)
-	ragL, err := rag.New(logger, "bot-context/", ragEmbedder)
+	ragL, err := rag.New(logger, "bot-context/", rag.EmbeddingFunc(genkit_embedding.New(g, embedder)))
 	if err != nil {
 		logger.Error("failed to create RAG logic", slog.String("err", err.Error()))
 
@@ -133,10 +115,7 @@ func main() {
 
 	hist := history.New(logger, "history-gemini/", history.Config{
 		HistorySummary: historySummary,
-		Summarizer: &genkitSummarizer{
-			g:     g,
-			model: model,
-		},
+		Summarizer:     genkit_summarizer.New(g, model),
 	})
 
 	aiLogic, err := agent.New(logger, g, model, hist, mcpClientAddrs, ragL, customModelConfig)

@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"syscall"
 	"sync"
 
 	"github.com/go-telegram/bot"
@@ -40,7 +39,7 @@ func main() {
 	}
 
 	l := New(aiSrv, usernameLimits)
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
 	opts := []bot.Option{

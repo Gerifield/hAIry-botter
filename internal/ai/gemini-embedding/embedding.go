@@ -1,4 +1,4 @@
-package genkit_embedding
+package gemini_embedding
 
 import (
 	"context"
@@ -6,14 +6,11 @@ import (
 
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
+	"github.com/philippgille/chromem-go"
 )
 
-// Func is a function that embeds text into a float32 vector.
-// It matches the chromem.EmbeddingFunc signature so it can be used directly with chromem.
-type Func func(ctx context.Context, text string) ([]float32, error)
-
-// New returns an embedding Func backed by the given genkit embedder.
-func New(g *genkit.Genkit, embedder ai.Embedder) Func {
+// EmbeddingFunc .
+func EmbeddingFunc(g *genkit.Genkit, embedder ai.Embedder) chromem.EmbeddingFunc {
 	return func(ctx context.Context, text string) ([]float32, error) {
 		resp, err := genkit.Embed(ctx, g, ai.WithEmbedder(embedder), ai.WithTextDocs(text))
 		if err != nil {

@@ -79,7 +79,6 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 	for i, tool := range tools {
 		toolRefs[i] = tool
 	}
-	logger.Info("tools loaded", slog.Int("num_tools", len(toolRefs)))
 
 	return &Logic{
 		logger:       logger,

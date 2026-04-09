@@ -14,10 +14,6 @@ import (
 	"github.com/philippgille/chromem-go"
 )
 
-// EmbeddingFunc is a function that converts text into a float32 vector.
-// It is compatible with chromem.EmbeddingFunc.
-type EmbeddingFunc func(ctx context.Context, text string) ([]float32, error)
-
 const (
 	collectionKey = "rag-content"
 	dbSaveName    = "database.db"
@@ -30,18 +26,18 @@ type Logic struct {
 
 	db           *chromem.DB // Database for RAG content
 	embeddedDocs int
-	embedFn      EmbeddingFunc
+	embedFn      chromem.EmbeddingFunc
 }
 
 // New .
-func New(logger *slog.Logger, ragPath string, embedder EmbeddingFunc) (*Logic, error) {
+func New(logger *slog.Logger, ragPath string, embedder chromem.EmbeddingFunc) (*Logic, error) {
 	logger.Info("try to load RAG db")
 	db, err := loadSavedDB(ragPath)
 	if err != nil {
 		// Doesn't exist or failed, recreate it
 		logger.Info("init new RAG db")
 		db = chromem.NewDB()
-		_, err := db.CreateCollection(collectionKey, nil, chromem.EmbeddingFunc(embedder)) // Just to make sure the collection exists
+		_, err := db.CreateCollection(collectionKey, nil, embedder) // Just to make sure the collection exists
 		if err != nil {
 			logger.Error("failed to create RAG collection", slog.String("collection", collectionKey), slog.String("error", err.Error()))
 
@@ -79,7 +75,7 @@ func (l *Logic) loadContent() error {
 	dir := os.DirFS(l.ragPath)
 
 	// we need to set embed function since we might have loaded an existing db
-	coll := l.db.GetCollection(collectionKey, chromem.EmbeddingFunc(l.embedFn))
+	coll := l.db.GetCollection(collectionKey, l.embedFn)
 
 	ctx := context.Background()
 	id := 1
@@ -125,7 +121,7 @@ func (l *Logic) loadContent() error {
 		return err
 	})
 
-	l.embeddedDocs = coll.Count() // Set the number of embedded documents
+	l.embeddedDocs = id - 1 // Set the number of embedded documents
 
 	l.logger.Info("rag embedding done", slog.Int("num", l.embeddedDocs))
 

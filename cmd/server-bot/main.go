@@ -9,16 +9,17 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"hairy-botter/internal/ai/agent"
 	"hairy-botter/internal/ai/gemini"
-	genkit_embedding "hairy-botter/internal/ai/genkit-embedding"
-	genkit_summarizer "hairy-botter/internal/ai/genkit-summarizer"
+	gemini_embedding "hairy-botter/internal/ai/gemini-embedding"
+	"hairy-botter/internal/ai/openai"
 	"hairy-botter/internal/history"
 	"hairy-botter/internal/rag"
 	"hairy-botter/internal/server"
 
+	"github.com/firebase/genkit/go/ai"
+	"github.com/firebase/genkit/go/core/api"
 	"github.com/firebase/genkit/go/genkit"
 )
 
@@ -38,6 +39,23 @@ func logLevelEnv() slog.Level {
 	}
 }
 
+// genkitSummarizer implements history.Summarizer using the genkit framework.
+type genkitSummarizer struct {
+	g     *genkit.Genkit
+	model ai.Model
+}
+
+func (s *genkitSummarizer) Summarize(ctx context.Context, systemPrompt, text string) (string, error) {
+	resp, err := genkit.Generate(ctx, s.g,
+		ai.WithModel(s.model),
+		ai.WithSystem(systemPrompt),
+		ai.WithMessages(ai.NewUserTextMessage(text)),
+	)
+	if err != nil {
+		return "", err
+	}
+	return resp.Text(), nil
+}
 
 func main() {
 
@@ -84,7 +102,6 @@ func main() {
 	searchDisabled := os.Getenv("GEMINI_SEARCH_DISABLED")
 	if searchDisabled == "true" || searchDisabled == "1" {
 		searchEnable = false
-		logger.Info("Gemini search plugin is disabled")
 	}
 
 	aiProvider := os.Getenv("AI_PROVIDER")
@@ -130,14 +147,16 @@ func main() {
 		customModelConfig = gemini.CustomConfig(searchEnable)
 	}
 
-	embedder, err := gemini.ConfigEmbedder(g, ga, "gemini-embedding-001")
+	// TODO: Make a better, more separated embedder config
+	embedder, err := ga.DefineEmbedder(g, "gemini-embedding-001", &ai.EmbedderOptions{})
 	if err != nil {
 		logger.Error("failed to define embedder", slog.String("err", err.Error()))
 
 		return
 	}
 
-	ragL, err := rag.New(logger, "bot-context/", rag.EmbeddingFunc(genkit_embedding.New(g, embedder)))
+	ragEmbedder := gemini_embedding.EmbeddingFunc(g, embedder)
+	ragL, err := rag.New(logger, "bot-context/", ragEmbedder)
 	if err != nil {
 		logger.Error("failed to create RAG logic", slog.String("err", err.Error()))
 
@@ -146,7 +165,10 @@ func main() {
 
 	hist := history.New(logger, "history-gemini/", history.Config{
 		HistorySummary: historySummary,
-		Summarizer:     genkit_summarizer.New(g, model),
+		Summarizer: &genkitSummarizer{
+			g:     g,
+			model: geminiModel,
+		},
 	})
 
 	aiLogic, err := agent.New(logger, g, activeModel, hist, mcpClientAddrs, ragL, customModelConfig)
@@ -176,7 +198,7 @@ func main() {
 	})
 
 	stopCh := make(chan os.Signal, 1)
-	signal.Notify(stopCh, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(stopCh, os.Interrupt, os.Kill)
 	finishedCh := make(chan struct{}) // Signal the end of the graceful shutdown
 	go func() {
 		<-stopCh

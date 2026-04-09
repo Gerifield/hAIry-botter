@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +16,10 @@ import (
 // ensureSafePath checks if the given path is within the base directory.
 // It returns the absolute safe path or an error if the path traverses outside the base directory.
 func ensureSafePath(baseDir, reqPath string) (string, error) {
+	if filepath.IsAbs(reqPath) {
+		return "", fmt.Errorf("path traversal attempt detected: absolute path: %s", reqPath)
+	}
+
 	absBase, err := filepath.Abs(baseDir)
 	if err != nil {
 		return "", fmt.Errorf("failed to get absolute base directory: %w", err)
@@ -44,6 +49,7 @@ func ensureSafePath(baseDir, reqPath string) (string, error) {
 func handleListFiles(baseDir string) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		pathArg := req.GetString("path", ".")
+		slog.InfoContext(ctx, "audit: list_files called", slog.String("path", pathArg))
 
 		safePath, err := ensureSafePath(baseDir, pathArg)
 		if err != nil {
@@ -90,6 +96,7 @@ func handleReadFile(baseDir string) func(context.Context, mcp.CallToolRequest) (
 		if pathArg == "" {
 			return mcp.NewToolResultError("path parameter is required"), nil
 		}
+		slog.InfoContext(ctx, "audit: read_file called", slog.String("path", pathArg))
 
 		safePath, err := ensureSafePath(baseDir, pathArg)
 		if err != nil {
@@ -114,6 +121,7 @@ func handleWriteFile(baseDir string) func(context.Context, mcp.CallToolRequest) 
 		}
 
 		contentArg := req.GetString("content", "")
+		slog.InfoContext(ctx, "audit: write_file called", slog.String("path", pathArg), slog.Int("content_len", len(contentArg)))
 
 		safePath, err := ensureSafePath(baseDir, pathArg)
 		if err != nil {
@@ -142,6 +150,7 @@ func handleExecuteCommand(baseDir string) func(context.Context, mcp.CallToolRequ
 		if cmdArg == "" {
 			return mcp.NewToolResultError("command parameter is required"), nil
 		}
+		slog.InfoContext(ctx, "audit: execute_command called", slog.String("command", cmdArg))
 
 		absBase, err := filepath.Abs(baseDir)
 		if err != nil {

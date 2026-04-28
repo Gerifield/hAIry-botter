@@ -96,7 +96,7 @@ func main() {
 
 		return
 	}
-	customModelConfig := gemini.CustomConfig(searchEnable)
+	customModelConfig := gemini.GenerateOptions(searchEnable)
 
 	embedder, err := gemini.ConfigEmbedder(g, ga, "gemini-embedding-001")
 	if err != nil {

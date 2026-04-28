@@ -61,24 +61,22 @@ func ConfigEmbedder(g *genkit.Genkit, ga modelEmbedder, modelName string) (ai.Em
 	return embedder, nil
 }
 
-// CustomConfig .
-func CustomConfig(searchEnable bool) any {
-	geminiSpecConfig := &genai.GenerateContentConfig{
+// GenerateOptions returns Gemini-specific generate options (thinking config, Google Search).
+// Keeping *genai.GenerateContentConfig internal avoids leaking provider types into the agent layer.
+func GenerateOptions(searchEnable bool) []ai.GenerateOption {
+	cfg := &genai.GenerateContentConfig{
 		ThinkingConfig: &genai.ThinkingConfig{
-			// ThinkingBudget: genai.Ptr[int32](0),
-			ThinkingLevel: genai.ThinkingLevelMinimal, // This is for the Gemini 3, Pro doesn't support it, just flash: https://ai.google.dev/gemini-api/docs/thinking#thinking-levels
+			ThinkingLevel: genai.ThinkingLevelMinimal,
 		},
 	}
-	// If the search is enabled, add this as a custom config, it is GEMINI ONLY!
 	if searchEnable {
 		ist := true
-		geminiSpecConfig.Tools = []*genai.Tool{
+		cfg.Tools = []*genai.Tool{
 			{GoogleSearch: &genai.GoogleSearch{}},
 		}
-		geminiSpecConfig.ToolConfig = &genai.ToolConfig{
+		cfg.ToolConfig = &genai.ToolConfig{
 			IncludeServerSideToolInvocations: &ist,
 		}
 	}
-
-	return geminiSpecConfig
+	return []ai.GenerateOption{ai.WithConfig(cfg)}
 }

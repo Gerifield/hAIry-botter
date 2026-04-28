@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"hairy-botter/internal/ai/domain"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -112,7 +114,7 @@ func (s *Server) handleChat(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 	}
 	sessionID := req.GetString("session_id", "")
 	if sessionID == "" {
-		sessionID = "mcp-default"
+		sessionID = uuid.NewString()
 	}
 
 	resp, err := s.logic.HandleMessage(ctx, sessionID, domain.Request{Message: msg})

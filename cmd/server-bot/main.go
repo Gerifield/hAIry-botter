@@ -11,10 +11,9 @@ import (
 	"strings"
 	"syscall"
 
+	"hairy-botter/internal/ai/adapters"
 	"hairy-botter/internal/ai/agent"
 	"hairy-botter/internal/ai/gemini"
-	genkit_embedding "hairy-botter/internal/ai/genkit-embedding"
-	genkit_summarizer "hairy-botter/internal/ai/genkit-summarizer"
 	"hairy-botter/internal/history"
 	"hairy-botter/internal/rag"
 	"hairy-botter/internal/server"
@@ -97,7 +96,7 @@ func main() {
 
 		return
 	}
-	customModelConfig := gemini.CustomConfig(searchEnable)
+	customModelConfig := gemini.GenerateOptions(searchEnable)
 
 	embedder, err := gemini.ConfigEmbedder(g, ga, "gemini-embedding-001")
 	if err != nil {
@@ -106,7 +105,7 @@ func main() {
 		return
 	}
 
-	ragL, err := rag.New(logger, "bot-context/", rag.EmbeddingFunc(genkit_embedding.New(g, embedder)))
+	ragL, err := rag.New(logger, "bot-context/", rag.EmbeddingFunc(adapters.NewEmbedder(g, embedder)))
 	if err != nil {
 		logger.Error("failed to create RAG logic", slog.String("err", err.Error()))
 
@@ -115,7 +114,7 @@ func main() {
 
 	hist := history.New(logger, "history-gemini/", history.Config{
 		HistorySummary: historySummary,
-		Summarizer:     genkit_summarizer.New(g, model),
+		Summarizer:     adapters.NewSummarizer(g, model),
 	})
 
 	aiLogic, err := agent.New(logger, g, model, hist, mcpClientAddrs, ragL, customModelConfig)

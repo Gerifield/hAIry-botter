@@ -32,15 +32,15 @@ type Logic struct {
 	history historyLogic
 	persona string
 
-	toolRefs     []ai.ToolRef
-	customConfig any
+	toolRefs  []ai.ToolRef
+	extraOpts []ai.GenerateOption
 
 	// RAG related fields
 	ragL *rag.Logic
 }
 
 // New .
-func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyLogic, mcpClientAddrs []string, ragL *rag.Logic, customConfig any) (*Logic, error) {
+func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyLogic, mcpClientAddrs []string, ragL *rag.Logic, extraOpts []ai.GenerateOption) (*Logic, error) {
 	var tools []ai.Tool
 	persona, err := readPersonality()
 	if err != nil {
@@ -82,14 +82,14 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 	logger.Info("tools loaded", slog.Int("num_tools", len(toolRefs)))
 
 	return &Logic{
-		logger:       logger,
-		g:            g,
-		model:        model,
-		history:      history,
-		persona:      persona,
-		toolRefs:     toolRefs,
-		customConfig: customConfig,
-		ragL:         ragL,
+		logger:    logger,
+		g:         g,
+		model:     model,
+		history:   history,
+		persona:   persona,
+		toolRefs:  toolRefs,
+		extraOpts: extraOpts,
+		ragL:      ragL,
 	}, nil
 }
 
@@ -147,20 +147,23 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 		ai.WithTools(l.toolRefs...),
 		ai.WithToolChoice(ai.ToolChoiceAuto),
 		ai.WithMessages(hist...),
-		ai.WithConfig(l.customConfig), // It has a nil check internally
 	}
+	genOpts = append(genOpts, l.extraOpts...)
 
 	if len(ragContextDocs) > 0 {
 		genOpts = append(genOpts, ai.WithDocs(ragContextDocs...))
 	}
 
-	resp, err := genkit.Generate(ctx, l.g, genOpts...) // TODO: if we rewrite, make this smarter
+	resp, err := genkit.Generate(ctx, l.g, genOpts...)
 	if err != nil {
 		return "", err
 	}
 
-	// TODO: Think about a better history management, since this contains the RAG messages too, maybe we want to separate them? For now we just save everything in the history, but we could optimize later if needed.
-	err = l.history.Save(ctx, sessionID, resp.History())
+	// Save hist (already includes the user message) plus the model response.
+	// Deliberately avoid resp.History() because genkit may inject RAG docs into the
+	// message list before sending to the model, which would bloat saved history.
+	toSave := append(hist, ai.NewModelTextMessage(resp.Text()))
+	err = l.history.Save(ctx, sessionID, toSave)
 
 	return resp.Text(), err
 }

@@ -154,13 +154,16 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 		genOpts = append(genOpts, ai.WithDocs(ragContextDocs...))
 	}
 
-	resp, err := genkit.Generate(ctx, l.g, genOpts...) // TODO: if we rewrite, make this smarter
+	resp, err := genkit.Generate(ctx, l.g, genOpts...)
 	if err != nil {
 		return "", err
 	}
 
-	// TODO: Think about a better history management, since this contains the RAG messages too, maybe we want to separate them? For now we just save everything in the history, but we could optimize later if needed.
-	err = l.history.Save(ctx, sessionID, resp.History())
+	// Save hist (already includes the user message) plus the model response.
+	// Deliberately avoid resp.History() because genkit may inject RAG docs into the
+	// message list before sending to the model, which would bloat saved history.
+	toSave := append(hist, ai.NewModelTextMessage(resp.Text()))
+	err = l.history.Save(ctx, sessionID, toSave)
 
 	return resp.Text(), err
 }

@@ -22,6 +22,16 @@ import (
 	"github.com/firebase/genkit/go/genkit"
 )
 
+// firstLine returns the first non-empty line of s, trimmed of whitespace.
+func firstLine(s string) string {
+	for _, line := range strings.SplitN(s, "\n", -1) {
+		if t := strings.TrimSpace(line); t != "" {
+			return t
+		}
+	}
+	return s
+}
+
 func logLevelEnv() slog.Level {
 	levelStr := os.Getenv("LOG_LEVEL")
 	switch strings.ToLower(levelStr) {
@@ -134,7 +144,7 @@ func main() {
 		}
 		agentDesc := os.Getenv("AGENT_DESCRIPTION")
 		if agentDesc == "" {
-			agentDesc = "General-purpose AI assistant"
+			agentDesc = firstLine(aiLogic.Persona())
 		}
 		mcpSrv := mcpserver.New(aiLogic, mcpserver.Config{
 			Name:        agentName,

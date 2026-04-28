@@ -46,6 +46,11 @@ func (l *Logic) ToolNames() []string {
 	return l.toolNames
 }
 
+// Persona returns the full system prompt loaded from personality.txt.
+func (l *Logic) Persona() string {
+	return l.persona
+}
+
 // New .
 func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyLogic, mcpClientAddrs []string, ragL *rag.Logic, extraOpts []ai.GenerateOption) (*Logic, error) {
 	var tools []ai.Tool

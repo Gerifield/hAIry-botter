@@ -66,7 +66,7 @@ func ConfigEmbedder(g *genkit.Genkit, ga modelEmbedder, modelName string) (ai.Em
 func GenerateOptions(searchEnable bool) []ai.GenerateOption {
 	cfg := &genai.GenerateContentConfig{
 		ThinkingConfig: &genai.ThinkingConfig{
-			ThinkingLevel: genai.ThinkingLevelMinimal,
+			ThinkingLevel: genai.ThinkingLevelMinimal, // This is for the Gemini 3, Pro doesn't support it, just flash: https://ai.google.dev/gemini-api/docs/thinking#thinking-levels
 		},
 	}
 	if searchEnable {

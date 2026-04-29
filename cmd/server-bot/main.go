@@ -15,11 +15,22 @@ import (
 	"hairy-botter/internal/ai/agent"
 	"hairy-botter/internal/ai/gemini"
 	"hairy-botter/internal/history"
+	"hairy-botter/internal/mcpserver"
 	"hairy-botter/internal/rag"
 	"hairy-botter/internal/server"
 
 	"github.com/firebase/genkit/go/genkit"
 )
+
+// firstLine returns the first non-empty line of s, trimmed of whitespace.
+func firstLine(s string) string {
+	for _, line := range strings.SplitN(s, "\n", -1) {
+		if t := strings.TrimSpace(line); t != "" {
+			return t
+		}
+	}
+	return s
+}
 
 func logLevelEnv() slog.Level {
 	levelStr := os.Getenv("LOG_LEVEL")
@@ -122,6 +133,30 @@ func main() {
 		logger.Error("failed to create AI logic", slog.String("err", err.Error()))
 
 		return
+	}
+
+	// Optional: expose this agent as an MCP sub-agent so orchestrators can call it.
+	// Set MCP_LISTEN_ADDR (e.g. ":8082") to enable; leave unset to skip.
+	if mcpListenAddr := os.Getenv("MCP_LISTEN_ADDR"); mcpListenAddr != "" {
+		agentName := os.Getenv("AGENT_NAME")
+		if agentName == "" {
+			agentName = "hairy-botter-agent"
+		}
+		agentDesc := os.Getenv("AGENT_DESCRIPTION")
+		if agentDesc == "" {
+			agentDesc = firstLine(aiLogic.Persona())
+		}
+		mcpSrv := mcpserver.New(aiLogic, mcpserver.Config{
+			Name:        agentName,
+			Description: agentDesc,
+			ToolNames:   aiLogic.ToolNames(),
+		})
+		go func() {
+			logger.Info("starting MCP sub-agent server", slog.String("addr", mcpListenAddr))
+			if err := mcpSrv.Start(mcpListenAddr); err != nil {
+				logger.Error("MCP sub-agent server failed", slog.String("err", err.Error()))
+			}
+		}()
 	}
 
 	corsOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")

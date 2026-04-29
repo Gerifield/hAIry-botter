@@ -33,10 +33,22 @@ type Logic struct {
 	persona string
 
 	toolRefs  []ai.ToolRef
+	toolNames []string
 	extraOpts []ai.GenerateOption
 
 	// RAG related fields
 	ragL *rag.Logic
+}
+
+// ToolNames returns the names of every tool this agent has access to.
+// Used by the MCP server layer to advertise capabilities to orchestrators.
+func (l *Logic) ToolNames() []string {
+	return l.toolNames
+}
+
+// Persona returns the full system prompt loaded from personality.txt.
+func (l *Logic) Persona() string {
+	return l.persona
 }
 
 // New .
@@ -74,10 +86,12 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 		}
 	}
 
-	// Convert the ai.Tools to ai.ToolRefs
+	// Convert ai.Tools to ai.ToolRefs; capture names before the interface erasure.
 	toolRefs := make([]ai.ToolRef, len(tools))
+	toolNames := make([]string, len(tools))
 	for i, tool := range tools {
 		toolRefs[i] = tool
+		toolNames[i] = tool.Name()
 	}
 	logger.Info("tools loaded", slog.Int("num_tools", len(toolRefs)))
 
@@ -88,6 +102,7 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 		history:   history,
 		persona:   persona,
 		toolRefs:  toolRefs,
+		toolNames: toolNames,
 		extraOpts: extraOpts,
 		ragL:      ragL,
 	}, nil

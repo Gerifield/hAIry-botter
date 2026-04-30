@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 
 	"hairy-botter/internal/ai/domain"
 	"hairy-botter/internal/rag"
@@ -165,11 +166,21 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 	return resp.Text(), err
 }
 
-func readPersonality() (string, error) {
-	b, err := os.ReadFile("personality.txt")
-	if err != nil {
-		return "", err
-	}
+var (
+	personaCache string
+	personaErr   error
+	personaOnce  sync.Once
+)
 
-	return string(b), nil
+func readPersonality() (string, error) {
+	personaOnce.Do(func() {
+		b, err := os.ReadFile("personality.txt")
+		if err != nil {
+			personaErr = err
+			return
+		}
+		personaCache = string(b)
+	})
+
+	return personaCache, personaErr
 }

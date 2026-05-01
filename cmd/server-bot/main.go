@@ -3,17 +3,19 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 
 	"hairy-botter/internal/ai/adapters"
 	"hairy-botter/internal/ai/agent"
 	"hairy-botter/internal/ai/gemini"
+	"hairy-botter/internal/config"
 	"hairy-botter/internal/history"
 	"hairy-botter/internal/mcpserver"
 	"hairy-botter/internal/rag"
@@ -32,8 +34,7 @@ func firstLine(s string) string {
 	return s
 }
 
-func logLevelEnv() slog.Level {
-	levelStr := os.Getenv("LOG_LEVEL")
+func parseLogLevel(levelStr string) slog.Level {
 	switch strings.ToLower(levelStr) {
 	case "debug":
 		return slog.LevelDebug
@@ -48,63 +49,57 @@ func logLevelEnv() slog.Level {
 	}
 }
 
-
 func main() {
+	configPath := flag.String("config", "config.yaml", "path to config file")
+	flag.Parse()
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: logLevelEnv(),
-	}))
-
-	addr := os.Getenv("ADDR")
-	if addr == "" {
-		addr = ":8080"
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", err)
+		os.Exit(1)
 	}
 
-	geminiKey := os.Getenv("GEMINI_API_KEY")
-	if geminiKey == "" {
-		logger.Error("GEMINI_API_KEY is not set")
+	// Configure logging based on run mode
+	logOut := os.Stdout
+	if cfg.RunMode == "mcp_cli" {
+		logOut = os.Stderr
+	}
 
+	logger := slog.New(slog.NewJSONHandler(logOut, &slog.HandlerOptions{
+		Level: parseLogLevel(cfg.LogLevel),
+	}))
+
+	if cfg.RunMode != "agent" && cfg.RunMode != "mcp_cli" {
+		logger.Error("invalid run_mode in config", slog.String("run_mode", cfg.RunMode))
 		return
 	}
 
-	historySummaryEnv := os.Getenv("HISTORY_SUMMARY")
-	historySummary := 20 // Default to 20
-	if historySummaryEnv != "" {
-		p, err := strconv.ParseInt(historySummaryEnv, 10, 32)
-		if err != nil {
-			logger.Error("failed to parse HISTORY_SUMMARY", slog.String("err", err.Error()))
-
-			return
-		}
-		historySummary = int(p)
+	if cfg.APIKeys.Gemini == "" {
+		logger.Error("GEMINI_API_KEY is not set in config or env")
+		return
 	}
 
-	mcpServer := os.Getenv("MCP_SERVERS")
-	mcpClientAddrs := make([]string, 0)
-	if mcpServer != "" {
-		// Parse the MCP server list
-		servers := strings.Split(mcpServer, ",")
-		for _, s := range servers {
-			s = strings.TrimSpace(s)
-			mcpClientAddrs = append(mcpClientAddrs, s)
+	historySummary := 20
+	if cfg.Capabilities.HistorySummary.Enabled && cfg.Capabilities.HistorySummary.MessageCount > 0 {
+		historySummary = cfg.Capabilities.HistorySummary.MessageCount
+	}
+
+	var mcpClientAddrs []string
+	for _, srv := range cfg.Capabilities.MCPServers {
+		if srv.Type == "http" && srv.Path != "" {
+			mcpClientAddrs = append(mcpClientAddrs, srv.Path)
 		}
 	}
 
-	searchEnable := true
-	searchDisabled := os.Getenv("GEMINI_SEARCH_DISABLED")
-	if searchDisabled == "true" || searchDisabled == "1" {
-		searchEnable = false
-		logger.Info("Gemini search plugin is disabled")
-	}
+	searchEnable := !cfg.GeminiSearchDisabled
 
 	// Initialize the Gemini AI logic
-	ga := gemini.ConfigPlugin(geminiKey)
+	ga := gemini.ConfigPlugin(cfg.APIKeys.Gemini)
 	g := genkit.Init(context.Background(), genkit.WithPlugins(ga))
 
-	model, err := gemini.ConfigModel(g, ga, os.Getenv("GEMINI_MODEL"))
+	model, err := gemini.ConfigModel(g, ga, cfg.Model)
 	if err != nil {
 		logger.Error("failed to define model", slog.String("err", err.Error()))
-
 		return
 	}
 	customModelConfig := gemini.GenerateOptions(searchEnable)
@@ -116,11 +111,13 @@ func main() {
 		return
 	}
 
-	ragL, err := rag.New(logger, "bot-context/", rag.EmbeddingFunc(adapters.NewEmbedder(g, embedder)))
-	if err != nil {
-		logger.Error("failed to create RAG logic", slog.String("err", err.Error()))
-
-		return
+	var ragL *rag.Logic
+	if cfg.Capabilities.Rag.Enabled && cfg.Capabilities.Rag.Directory != "" {
+		ragL, err = rag.New(logger, cfg.Capabilities.Rag.Directory, rag.EmbeddingFunc(adapters.NewEmbedder(g, embedder)))
+		if err != nil {
+			logger.Error("failed to create RAG logic", slog.String("err", err.Error()))
+			return
+		}
 	}
 
 	hist := history.New(logger, "history-gemini/", history.Config{
@@ -128,55 +125,76 @@ func main() {
 		Summarizer:     adapters.NewSummarizer(g, model),
 	})
 
-	aiLogic, err := agent.New(logger, g, model, hist, mcpClientAddrs, ragL, customModelConfig)
+	personaStr := cfg.Personality.Role + "\n" + cfg.Personality.SystemPrompt
+	aiLogic, err := agent.New(logger, g, model, hist, mcpClientAddrs, ragL, personaStr, customModelConfig)
 	if err != nil {
 		logger.Error("failed to create AI logic", slog.String("err", err.Error()))
 
 		return
 	}
 
-	// Optional: expose this agent as an MCP sub-agent so orchestrators can call it.
-	// Set MCP_LISTEN_ADDR (e.g. ":8082") to enable; leave unset to skip.
-	if mcpListenAddr := os.Getenv("MCP_LISTEN_ADDR"); mcpListenAddr != "" {
-		agentName := os.Getenv("AGENT_NAME")
+	if cfg.RunMode == "mcp_cli" {
+		logger.Info("running in mcp_cli mode, awaiting MCP JSON-RPC over stdio (not yet implemented)")
+		// The CLI implementation will go here in a subsequent task.
+		// For now, gracefully exit.
+		return
+	}
+
+	// We are in "agent" run mode
+	var srv *server.Server
+
+	if cfg.AgentConfig.EnableMCPHTTP {
+		agentName := cfg.AgentConfig.AgentName
 		if agentName == "" {
 			agentName = "hairy-botter-agent"
 		}
-		agentDesc := os.Getenv("AGENT_DESCRIPTION")
+		agentDesc := cfg.AgentConfig.AgentDescription
 		if agentDesc == "" {
 			agentDesc = firstLine(aiLogic.Persona())
 		}
+
 		mcpSrv := mcpserver.New(aiLogic, mcpserver.Config{
 			Name:        agentName,
 			Description: agentDesc,
 			ToolNames:   aiLogic.ToolNames(),
 		})
 		go func() {
-			logger.Info("starting MCP sub-agent server", slog.String("addr", mcpListenAddr))
-			if err := mcpSrv.Start(mcpListenAddr); err != nil {
+			mcpAddr := cfg.AgentConfig.MCPPort
+			if mcpAddr == "" {
+				mcpAddr = ":8081"
+			}
+			logger.Info("starting MCP sub-agent server", slog.String("addr", mcpAddr))
+			if err := mcpSrv.Start(mcpAddr); err != nil {
 				logger.Error("MCP sub-agent server failed", slog.String("err", err.Error()))
 			}
 		}()
 	}
 
-	corsOrigin := os.Getenv("CORS_ALLOWED_ORIGIN")
-	if corsOrigin == "" {
-		corsOrigin = "*"
-	}
-	corsMethods := os.Getenv("CORS_ALLOWED_METHODS")
-	if corsMethods == "" {
-		corsMethods = "POST, OPTIONS"
-	}
-	corsHeaders := os.Getenv("CORS_ALLOWED_HEADERS")
-	if corsHeaders == "" {
-		corsHeaders = "Content-Type, X-User-ID"
-	}
+	if cfg.AgentConfig.EnableChatProxy {
+		corsOrigin := cfg.AgentConfig.CORSAllowedOrigin
+		if corsOrigin == "" {
+			corsOrigin = "*"
+		}
+		corsMethods := cfg.AgentConfig.CORSAllowedMethods
+		if corsMethods == "" {
+			corsMethods = "POST, OPTIONS"
+		}
+		corsHeaders := cfg.AgentConfig.CORSAllowedHeaders
+		if corsHeaders == "" {
+			corsHeaders = "Content-Type, X-User-ID"
+		}
 
-	srv := server.New(addr, aiLogic, server.Config{
-		AllowedOrigin:  corsOrigin,
-		AllowedMethods: corsMethods,
-		AllowedHeaders: corsHeaders,
-	})
+		addr := cfg.AgentConfig.HTTPPort
+		if addr == "" {
+			addr = ":8080"
+		}
+
+		srv = server.New(addr, aiLogic, server.Config{
+			AllowedOrigin:  corsOrigin,
+			AllowedMethods: corsMethods,
+			AllowedHeaders: corsHeaders,
+		})
+	}
 
 	stopCh := make(chan os.Signal, 1)
 	signal.Notify(stopCh, os.Interrupt, syscall.SIGTERM)
@@ -184,22 +202,31 @@ func main() {
 	go func() {
 		<-stopCh
 		logger.Info("shutting down server")
-		err := srv.Stop(context.Background())
-		if err != nil {
-			logger.Error("failed to stop server", slog.String("err", err.Error()))
+		if srv != nil {
+			err := srv.Stop(context.Background())
+			if err != nil {
+				logger.Error("failed to stop server", slog.String("err", err.Error()))
+			}
 		}
 
-		logger.Info("flushing RAG database")
-		err = ragL.Close()
-		if err != nil {
-			logger.Error("failed to persist the database", slog.String("err", err.Error()))
+		if ragL != nil {
+			logger.Info("flushing RAG database")
+			err = ragL.Close()
+			if err != nil {
+				logger.Error("failed to persist the database", slog.String("err", err.Error()))
+			}
 		}
 		close(finishedCh)
 	}()
 
-	logger.Info("starting server", slog.String("addr", addr))
-	if err := srv.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		logger.Error("server failed", slog.String("err", err.Error()))
+	if srv != nil {
+		logger.Info("starting server", slog.String("addr", cfg.AgentConfig.HTTPPort))
+		if err := srv.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("server failed", slog.String("err", err.Error()))
+		}
+	} else {
+		// Wait if no chat proxy to keep agent alive
+		logger.Info("agent running without chat proxy")
 	}
 	<-finishedCh
 }

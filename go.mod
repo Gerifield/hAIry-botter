@@ -7,11 +7,13 @@ require (
 	github.com/firebase/genkit/go v1.4.0
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/go-telegram/bot v1.17.0
+	github.com/google/uuid v1.6.0
 	github.com/mark3labs/mcp-go v0.29.1-0.20250521213157-f99e5472f312
 	github.com/philippgille/chromem-go v0.7.0
 	golang.org/x/oauth2 v0.30.0
 	google.golang.org/api v0.236.0
 	google.golang.org/genai v1.51.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -29,7 +31,6 @@ require (
 	github.com/google/dotprompt/go v0.0.0-20251014011017-8d056e027254 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
 	github.com/googleapis/gax-go/v2 v2.14.2 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
@@ -58,7 +59,6 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250603155806-513f23925822 // indirect
 	google.golang.org/grpc v1.73.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 replace github.com/firebase/genkit/go => github.com/gerifield/genkit/go v1.5.0-fix

@@ -1,0 +1,66 @@
+# ---------------------------------------------------------
+# 1. Core Identity (Mutually Exclusive)
+# Options: "agent" (default orchestrator) OR "mcp_cli" (stateless worker)
+# ---------------------------------------------------------
+run_mode: "agent"
+
+# ---------------------------------------------------------
+# 2. Agent Mode Options
+# (These are ONLY evaluated if run_mode is "agent")
+# ---------------------------------------------------------
+agent_config:
+  enable_chat_proxy: true   # The main HTTP UI/Proxy interface
+  cors_allowed_origin: "*"
+  cors_allowed_methods: "POST, OPTIONS"
+  cors_allowed_headers: "Content-Type, X-User-ID"
+  http_port: ":8080"
+  enable_mcp_http: false    # Stateful MCP server running on a port
+  mcp_port: ":8081"
+  agent_name: "hairy-botter-agent"
+  agent_description: "A Senior Go Developer AI Agent."
+
+# ---------------------------------------------------------
+# 3. Universal Settings (Evaluated by all modes)
+# ---------------------------------------------------------
+model: "gemini-pro-latest"
+gemini_search_disabled: true # Gemini specific config
+log_level: warning
+
+
+# Defines the specific role and behavioral constraints
+personality:
+  role: "Senior Go Developer"
+  system_prompt: "You are an autonomous coding agent. Always verify the TODO.md before writing code."
+
+# Capabilities toggles to allow subagents to be fully lobotomized/stateless
+capabilities:
+  rag:
+    enabled: true
+    directory: "./knowledge_base"
+  history_summary:
+    enabled: true
+    message_count: 20
+  mcp_servers:
+    - type: http
+      path: http://localhost:8081/mcp
+    - type: cli
+      path: something
+
+
+# ---------------------------------------------------------
+# 4. Context Management
+# ---------------------------------------------------------
+context:
+  # "Magic files" automatically read from disk and injected into the prompt
+  # on wake-up. Leave empty (`[]`) for subagents to save context space.
+  auto_inject:
+    - "TODO.md"           # The active task state
+    - "hairy-botter.md"   # Static repository rules and architecture map
+    - "memory.md"         # Long-term crystallized facts
+
+# ---------------------------------------------------------
+# API Keys (Fallback config, can be overridden by env vars)
+# ---------------------------------------------------------
+# api_keys:
+#   gemini: "your_gemini_api_key_here"
+#   openai: "your_openai_api_key_here"

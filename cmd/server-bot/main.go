@@ -79,9 +79,13 @@ func main() {
 		return
 	}
 
-	historySummary := 20
-	if cfg.Capabilities.HistorySummary.Enabled && cfg.Capabilities.HistorySummary.MessageCount > 0 {
-		historySummary = cfg.Capabilities.HistorySummary.MessageCount
+	historySummary := 0
+	if cfg.Capabilities.HistorySummary.Enabled {
+		if cfg.Capabilities.HistorySummary.MessageCount > 0 {
+			historySummary = cfg.Capabilities.HistorySummary.MessageCount
+		} else {
+			historySummary = 20
+		}
 	}
 
 	var mcpClientAddrs []string

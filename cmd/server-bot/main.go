@@ -110,7 +110,7 @@ func main() {
 		logger.Error("failed to define model", slog.String("err", err.Error()))
 		return
 	}
-	customModelConfig := gemini.GenerateOptions(searchEnable)
+	customModelConfig := gemini.GenerateOptions(searchEnable, cfg.GeminiThinkingLevel)
 
 	embedder, err := gemini.ConfigEmbedder(g, ga, "gemini-embedding-001")
 	if err != nil {

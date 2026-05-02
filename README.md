@@ -72,6 +72,7 @@ You can configure the server using Environment Variables.
 | `GEMINI_MODEL` | The specific model version to use. | `gemini-flash-latest` | ❌ |
 | `MCP_SERVERS` | Comma-separated list of MCP HTTP stream servers (e.g., `http://localhost:8081/mcp`). | - | ❌ |
 | `GEMINI_SEARCH_DISABLED` | Set to `true` or `1` to disable Google Search grounding. Search is **enabled by default**. | `false` | ❌ |
+| `GEMINI_THINKING_LEVEL` | Sets the Gemini ThinkingLevel. Valid values: `LOW`, `MEDIUM`, `HIGH`, `MINIMAL`. | - (omitted) | ❌ |
 | `HISTORY_SUMMARY` | Message count trigger for history summarization (`0` to disable). | `20` | ❌ |
 | `LOG_LEVEL` | Logging verbosity (`debug`, `info`, `warn`, `error`). | `info` | ❌ |
 | `CORS_ALLOWED_ORIGIN` | CORS allowed origin header. | `*` | ❌ |

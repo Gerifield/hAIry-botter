@@ -107,6 +107,11 @@ func (s *Server) Start(addr string) error {
 	return streamSrv.Start(addr)
 }
 
+// StartStdio runs the MCP server using standard input/output.
+func (s *Server) StartStdio() error {
+	return server.ServeStdio(s.mcpSrv)
+}
+
 func (s *Server) handleChat(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	msg := req.GetString("message", "")
 	if msg == "" {

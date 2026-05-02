@@ -147,9 +147,27 @@ func main() {
 	}
 
 	if cfg.RunMode == "mcp_cli" {
-		logger.Info("running in mcp_cli mode, awaiting MCP JSON-RPC over stdio (not yet implemented)")
-		// The CLI implementation will go here in a subsequent task.
-		// For now, gracefully exit.
+		logger.Info("running in mcp_cli mode, awaiting MCP JSON-RPC over stdio")
+
+		agentName := cfg.AgentConfig.AgentName
+		if agentName == "" {
+			agentName = "hairy-botter-agent"
+		}
+		agentDesc := cfg.AgentConfig.AgentDescription
+		if agentDesc == "" {
+			agentDesc = firstLine(aiLogic.Persona())
+		}
+
+		mcpSrv := mcpserver.New(aiLogic, mcpserver.Config{
+			Name:        agentName,
+			Description: agentDesc,
+			ToolNames:   aiLogic.ToolNames(),
+		})
+
+		if err := mcpSrv.StartStdio(); err != nil {
+			logger.Error("MCP stdio server failed", slog.String("err", err.Error()))
+			os.Exit(1)
+		}
 		return
 	}
 

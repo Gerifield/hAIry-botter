@@ -72,7 +72,6 @@ type ContextConfig struct {
 // APIKeysConfig holds API keys to prioritize yaml over env
 type APIKeysConfig struct {
 	Gemini string `yaml:"gemini"`
-	OpenAI string `yaml:"openai"` // Included as a placeholder based on user comments
 }
 
 // Load reads and parses the configuration file.
@@ -91,9 +90,6 @@ func Load(path string) (*Config, error) {
 	// Apply environment variable fallbacks for API keys
 	if cfg.APIKeys.Gemini == "" {
 		cfg.APIKeys.Gemini = os.Getenv("GEMINI_API_KEY")
-	}
-	if cfg.APIKeys.OpenAI == "" {
-		cfg.APIKeys.OpenAI = os.Getenv("OPENAI_API_KEY")
 	}
 
 	// Set defaults if some values are absent

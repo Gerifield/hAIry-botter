@@ -13,6 +13,7 @@ type Config struct {
 	AgentConfig          AgentConfig        `yaml:"agent_config"`
 	Model                string             `yaml:"model"`
 	GeminiSearchDisabled bool               `yaml:"gemini_search_disabled"`
+	GeminiThinkingLevel  string             `yaml:"gemini_thinking_level"`
 	LogLevel             string             `yaml:"log_level"`
 	Personality          PersonalityConfig  `yaml:"personality"`
 	Capabilities         CapabilitiesConfig `yaml:"capabilities"`

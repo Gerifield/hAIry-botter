@@ -60,8 +60,10 @@ type HistorySummaryConfig struct {
 
 // MCPServerConfig defines an external Tool Provider.
 type MCPServerConfig struct {
-	Type string `yaml:"type"`
-	Path string `yaml:"path"`
+	Type string            `yaml:"type"`
+	Path string            `yaml:"path"`
+	Args []string          `yaml:"args"`
+	Env  map[string]string `yaml:"env"`
 }
 
 // ContextConfig specifies files to inject automatically.

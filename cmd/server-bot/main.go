@@ -87,10 +87,15 @@ func main() {
 		}
 	}
 
-	var mcpClientAddrs []string
+	var mcpServers []agent.MCPServer
 	for _, srv := range cfg.Capabilities.MCPServers {
-		if srv.Type == "http" && srv.Path != "" {
-			mcpClientAddrs = append(mcpClientAddrs, srv.Path)
+		if srv.Path != "" {
+			mcpServers = append(mcpServers, agent.MCPServer{
+				Type: srv.Type,
+				Path: srv.Path,
+				Args: srv.Args,
+				Env:  srv.Env,
+			})
 		}
 	}
 
@@ -139,7 +144,7 @@ func main() {
 	}
 
 	personaStr := cfg.Personality.Role + "\n" + cfg.Personality.SystemPrompt + autoInjectContent.String()
-	aiLogic, err := agent.New(logger, g, model, hist, mcpClientAddrs, ragL, personaStr, customModelConfig)
+	aiLogic, err := agent.New(logger, g, model, hist, mcpServers, ragL, personaStr, customModelConfig)
 	if err != nil {
 		logger.Error("failed to create AI logic", slog.String("err", err.Error()))
 

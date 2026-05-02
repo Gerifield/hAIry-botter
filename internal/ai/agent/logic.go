@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 
 	"hairy-botter/internal/ai/domain"
 	"hairy-botter/internal/rag"
@@ -14,6 +15,14 @@ import (
 	"github.com/firebase/genkit/go/genkit"
 	genkitMCP "github.com/firebase/genkit/go/plugins/mcp"
 )
+
+// MCPServer defines the configuration for a single MCP server.
+type MCPServer struct {
+	Type string
+	Path string
+	Args []string
+	Env  map[string]string
+}
 
 type historyLogic interface {
 	Read(ctx context.Context, sessionID string) ([]*ai.Message, error)
@@ -51,18 +60,51 @@ func (l *Logic) Persona() string {
 }
 
 // New .
-func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyLogic, mcpClientAddrs []string, ragL *rag.Logic, persona string, extraOpts []ai.GenerateOption) (*Logic, error) {
+func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyLogic, inputMCPServers []MCPServer, ragL *rag.Logic, persona string, extraOpts []ai.GenerateOption) (*Logic, error) {
 	var tools []ai.Tool
 
-	if len(mcpClientAddrs) > 0 {
-		mcpServers := make([]genkitMCP.MCPServerConfig, 0, len(mcpClientAddrs))
-		for i, addr := range mcpClientAddrs {
-			mcpServers = append(mcpServers, genkitMCP.MCPServerConfig{
+	if len(inputMCPServers) > 0 {
+		mcpServers := make([]genkitMCP.MCPServerConfig, 0, len(inputMCPServers))
+		for i, srv := range inputMCPServers {
+			cfg := genkitMCP.MCPServerConfig{
 				Name: fmt.Sprintf("mcp-client-%d", i), // Unique name for each client
-				Config: genkitMCP.MCPClientOptions{
-					StreamableHTTP: &genkitMCP.StreamableHTTPConfig{BaseURL: addr},
-				},
-			})
+			}
+
+			if srv.Type == "http" {
+				cfg.Config = genkitMCP.MCPClientOptions{
+					StreamableHTTP: &genkitMCP.StreamableHTTPConfig{BaseURL: srv.Path},
+				}
+			} else if srv.Type == "cli" {
+				if srv.Path == "" {
+					return nil, errors.New("empty cli path for mcp server")
+				}
+
+				// Build the environment
+				var env []string
+				// 1. Get from OS environment
+				for _, e := range os.Environ() {
+					env = append(env, e)
+				}
+				// 2. Override with config environment
+				if len(srv.Env) > 0 {
+					for k, v := range srv.Env {
+						env = append(env, fmt.Sprintf("%s=%s", k, v))
+					}
+				}
+
+				cfg.Config = genkitMCP.MCPClientOptions{
+					Stdio: &genkitMCP.StdioConfig{
+						Command: srv.Path,
+						Args:    srv.Args,
+						Env:     env,
+					},
+				}
+			} else {
+				logger.Warn("unknown mcp server type", slog.String("type", srv.Type))
+				continue
+			}
+
+			mcpServers = append(mcpServers, cfg)
 		}
 
 		logger.Info("MCP client list is not empty, initializing MCP clients")

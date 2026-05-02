@@ -128,7 +128,17 @@ func main() {
 		Summarizer:     adapters.NewSummarizer(g, model),
 	})
 
-	personaStr := cfg.Personality.Role + "\n" + cfg.Personality.SystemPrompt
+	var autoInjectContent strings.Builder
+	for _, file := range cfg.Context.AutoInject {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			logger.Warn("failed to load auto-inject file", slog.String("file", file), slog.String("error", err.Error()))
+			continue
+		}
+		autoInjectContent.WriteString(fmt.Sprintf("\n\n[System Context - File: %s]\n%s", file, string(content)))
+	}
+
+	personaStr := cfg.Personality.Role + "\n" + cfg.Personality.SystemPrompt + autoInjectContent.String()
 	aiLogic, err := agent.New(logger, g, model, hist, mcpClientAddrs, ragL, personaStr, customModelConfig)
 	if err != nil {
 		logger.Error("failed to create AI logic", slog.String("err", err.Error()))

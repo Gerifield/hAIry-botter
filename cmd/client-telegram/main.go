@@ -9,8 +9,8 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"syscall"
 	"sync"
+	"syscall"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"

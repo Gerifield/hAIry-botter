@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 
 	"hairy-botter/internal/ai/domain"
 	"hairy-botter/internal/rag"
@@ -52,12 +51,8 @@ func (l *Logic) Persona() string {
 }
 
 // New .
-func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyLogic, mcpClientAddrs []string, ragL *rag.Logic, extraOpts []ai.GenerateOption) (*Logic, error) {
+func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyLogic, mcpClientAddrs []string, ragL *rag.Logic, persona string, extraOpts []ai.GenerateOption) (*Logic, error) {
 	var tools []ai.Tool
-	persona, err := readPersonality()
-	if err != nil {
-		return nil, err
-	}
 
 	if len(mcpClientAddrs) > 0 {
 		mcpServers := make([]genkitMCP.MCPServerConfig, 0, len(mcpClientAddrs))
@@ -181,13 +176,4 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 	err = l.history.Save(ctx, sessionID, toSave)
 
 	return resp.Text(), err
-}
-
-func readPersonality() (string, error) {
-	b, err := os.ReadFile("personality.txt")
-	if err != nil {
-		return "", err
-	}
-
-	return string(b), nil
 }

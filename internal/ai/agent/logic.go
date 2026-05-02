@@ -70,11 +70,20 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 				Name: fmt.Sprintf("mcp-client-%d", i), // Unique name for each client
 			}
 
-			if srv.Type == "http" {
+			serverType := srv.Type
+			if serverType == "" {
+				if len(srv.Path) >= 4 && srv.Path[:4] == "http" {
+					serverType = "http"
+				} else {
+					serverType = "cli"
+				}
+			}
+
+			if serverType == "http" {
 				cfg.Config = genkitMCP.MCPClientOptions{
 					StreamableHTTP: &genkitMCP.StreamableHTTPConfig{BaseURL: srv.Path},
 				}
-			} else if srv.Type == "cli" {
+			} else if serverType == "cli" {
 				if srv.Path == "" {
 					return nil, errors.New("empty cli path for mcp server")
 				}
@@ -100,7 +109,7 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 					},
 				}
 			} else {
-				logger.Warn("unknown mcp server type", slog.String("type", srv.Type))
+				logger.Warn("unknown mcp server type", slog.String("type", serverType))
 				continue
 			}
 

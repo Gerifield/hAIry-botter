@@ -86,12 +86,8 @@ func GenerateOptions(searchEnable bool, thinkingLevel string) []ai.GenerateOptio
 	}
 
 	if searchEnable {
-		ist := true
 		cfg.Tools = []*genai.Tool{
 			{GoogleSearch: &genai.GoogleSearch{}},
-		}
-		cfg.ToolConfig = &genai.ToolConfig{
-			IncludeServerSideToolInvocations: &ist,
 		}
 		hasConfig = true
 	}

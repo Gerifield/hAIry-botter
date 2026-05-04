@@ -54,7 +54,7 @@ func (l *Logic) ToolNames() []string {
 	return l.toolNames
 }
 
-// Persona returns the full system prompt loaded from personality.txt.
+// Persona returns the effective system prompt (role + system_prompt from config.yaml, plus any auto-injected context).
 func (l *Logic) Persona() string {
 	return l.persona
 }

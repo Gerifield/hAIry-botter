@@ -1,6 +1,8 @@
 package gemini
 
 import (
+	"strings"
+
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/core/api"
 	"github.com/firebase/genkit/go/genkit"
@@ -63,11 +65,14 @@ func ConfigEmbedder(g *genkit.Genkit, ga modelEmbedder, modelName string) (ai.Em
 // GenerateOptions returns Gemini-specific generate options (thinking config, Google Search).
 // Returns nil when neither feature is requested so no provider-specific config is sent
 // to models that don't support it (e.g. older flash models without thinking support).
-func GenerateOptions(searchEnable bool, thinkingLevel string) []ai.GenerateOption {
+// modelName is used to filter out thinking levels unsupported by the specific model variant:
+// MINIMAL is only valid for Flash models (e.g. gemini-2.5-flash); Pro models only support LOW/MEDIUM/HIGH.
+func GenerateOptions(modelName string, searchEnable bool, thinkingLevel string) []ai.GenerateOption {
 	cfg := &genai.GenerateContentConfig{}
 	hasConfig := false
 
 	if thinkingLevel != "" {
+		isFlash := strings.Contains(strings.ToLower(modelName), "flash")
 		var level genai.ThinkingLevel
 		switch thinkingLevel {
 		case "LOW":
@@ -77,7 +82,10 @@ func GenerateOptions(searchEnable bool, thinkingLevel string) []ai.GenerateOptio
 		case "HIGH":
 			level = genai.ThinkingLevelHigh
 		case "MINIMAL":
-			level = genai.ThinkingLevelMinimal
+			if isFlash {
+				level = genai.ThinkingLevelMinimal
+			}
+			// MINIMAL is not supported on Pro models; skip silently.
 		}
 		if level != "" {
 			cfg.ThinkingConfig = &genai.ThinkingConfig{ThinkingLevel: level}
@@ -86,8 +94,12 @@ func GenerateOptions(searchEnable bool, thinkingLevel string) []ai.GenerateOptio
 	}
 
 	if searchEnable {
+		ist := true
 		cfg.Tools = []*genai.Tool{
 			{GoogleSearch: &genai.GoogleSearch{}},
+		}
+		cfg.ToolConfig = &genai.ToolConfig{
+			IncludeServerSideToolInvocations: &ist,
 		}
 		hasConfig = true
 	}

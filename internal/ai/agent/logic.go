@@ -246,13 +246,13 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 
 	genCtx, genCancel := context.WithTimeout(ctx, 120*time.Second)
 	defer genCancel()
-	logger.Warn("calling genkit.Generate", slog.String("model", l.model.Name()), slog.Int("history_len", len(hist)), slog.Int("num_tools", len(l.toolRefs)))
+	logger.Info("calling genkit.Generate", slog.String("model", l.model.Name()), slog.Int("history_len", len(hist)), slog.Int("num_tools", len(l.toolRefs)))
 	resp, err := genkit.Generate(genCtx, l.g, genOpts...)
 	if err != nil {
-		logger.Warn("genkit.Generate failed", slog.String("error", err.Error()))
+		logger.Error("genkit.Generate failed", slog.String("error", err.Error()))
 		return "", err
 	}
-	logger.Warn("genkit.Generate succeeded", slog.Int("response_len", len(resp.Text())))
+	logger.Debug("genkit.Generate succeeded", slog.Int("response_len", len(resp.Text())))
 
 	// Save hist (already includes the user message) plus the model response.
 	// Deliberately avoid resp.History() because genkit may inject RAG docs into the

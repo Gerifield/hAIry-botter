@@ -12,7 +12,7 @@ require (
 	github.com/philippgille/chromem-go v0.7.0
 	golang.org/x/oauth2 v0.30.0
 	google.golang.org/api v0.236.0
-	google.golang.org/genai v1.51.0
+	google.golang.org/genai v1.55.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

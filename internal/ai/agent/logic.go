@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"hairy-botter/internal/ai/domain"
 	"hairy-botter/internal/rag"
@@ -81,7 +82,10 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 
 			if serverType == "http" {
 				cfg.Config = genkitMCP.MCPClientOptions{
-					StreamableHTTP: &genkitMCP.StreamableHTTPConfig{BaseURL: srv.Path},
+					StreamableHTTP: &genkitMCP.StreamableHTTPConfig{
+						BaseURL: srv.Path,
+						Timeout: 15 * time.Second,
+					},
 				}
 			} else if serverType == "cli" {
 				if srv.Path == "" {

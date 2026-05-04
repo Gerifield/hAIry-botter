@@ -97,7 +97,7 @@ func Load(path string) (*Config, error) {
 
 	// Set defaults if some values are absent
 	if cfg.Model == "" {
-		cfg.Model = "gemini-pro-latest"
+		cfg.Model = "gemini-flash-latest"
 	}
 	if cfg.LogLevel == "" {
 		cfg.LogLevel = "warning"

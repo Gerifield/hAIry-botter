@@ -28,23 +28,22 @@ func ConfigPlugin(apiKey string) AgentConfigurator {
 
 // ConfigModel .
 func ConfigModel(g *genkit.Genkit, ga modelDefiner, modelName string) (ai.Model, error) {
-	geminiModelOptions := (*ai.ModelOptions)(nil)
 	if modelName == "" {
-		modelName = "gemini-flash-latest" // Always use the latest flash model by default
-		geminiModelOptions = &ai.ModelOptions{
-			Label:    "Gemini Flash Latest",
-			Versions: []string{},
+		modelName = "gemini-flash-latest"
+	}
+
+	// Try the known-model path first (nil opts = look up from plugin's registry).
+	// -latest aliases and next-gen model names are not in the registry, so fall back
+	// to generic multimodal options so the caller still gets a usable model.
+	model, err := ga.DefineModel(g, modelName, nil)
+	if err != nil {
+		model, err = ga.DefineModel(g, modelName, &ai.ModelOptions{
 			Supports: &googlegenai.Multimodal,
 			Stage:    ai.ModelStageUnstable,
-		}
+		})
 	}
 
-	model, err := ga.DefineModel(g, modelName, geminiModelOptions)
-	if err != nil {
-		return nil, err
-	}
-
-	return model, nil
+	return model, err
 }
 
 // ConfigEmbedder .
@@ -63,7 +62,7 @@ func ConfigEmbedder(g *genkit.Genkit, ga modelEmbedder, modelName string) (ai.Em
 
 // GenerateOptions returns Gemini-specific generate options (thinking config, Google Search).
 // Returns nil when neither feature is requested so no provider-specific config is sent
-// to models that don't support it (e.g. gemini-flash-latest with no thinking support).
+// to models that don't support it (e.g. older flash models without thinking support).
 func GenerateOptions(searchEnable bool, thinkingLevel string) []ai.GenerateOption {
 	cfg := &genai.GenerateContentConfig{}
 	hasConfig := false

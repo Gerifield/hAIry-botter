@@ -69,7 +69,7 @@ All configuration lives in `config.yaml`. Copy `config.yaml.example` to `config.
 
 ```yaml
 run_mode: "agent"          # "agent" (HTTP server) or "mcp_cli" (stdio sub-agent)
-model: "gemini-2.5-flash"
+model: "gemini-flash-latest"
 gemini_search_disabled: false
 log_level: "info"
 

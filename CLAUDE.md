@@ -78,7 +78,7 @@ All configuration lives in `config.yaml`. Pass a different path with `-config <p
 | Field | Default | Purpose |
 |---|---|---|
 | `run_mode` | `agent` | `agent` — full server; `mcp_cli` — stdio sub-agent |
-| `model` | `gemini-pro-latest` | Gemini model name |
+| `model` | `gemini-flash-latest` | Gemini model name |
 | `gemini_search_disabled` | `false` | Disable Google Search grounding (Gemini-specific) |
 | `gemini_thinking_level` | — | Thinking level for supported models (`minimal`, etc.) |
 | `log_level` | `warning` | `debug` / `info` / `warning` / `error` |

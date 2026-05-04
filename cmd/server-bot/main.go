@@ -99,6 +99,7 @@ func main() {
 			})
 		}
 	}
+	logger.Info("MCP servers from config", slog.Int("count", len(mcpServers)))
 
 	searchEnable := !cfg.GeminiSearchDisabled
 
@@ -164,7 +165,7 @@ func main() {
 			agentDesc = firstLine(aiLogic.Persona())
 		}
 
-		mcpSrv := mcpserver.New(aiLogic, mcpserver.Config{
+		mcpSrv := mcpserver.New(logger, aiLogic, mcpserver.Config{
 			Name:        agentName,
 			Description: agentDesc,
 			ToolNames:   aiLogic.ToolNames(),
@@ -190,7 +191,7 @@ func main() {
 			agentDesc = firstLine(aiLogic.Persona())
 		}
 
-		mcpSrv := mcpserver.New(aiLogic, mcpserver.Config{
+		mcpSrv := mcpserver.New(logger, aiLogic, mcpserver.Config{
 			Name:        agentName,
 			Description: agentDesc,
 			ToolNames:   aiLogic.ToolNames(),

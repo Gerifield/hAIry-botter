@@ -62,9 +62,11 @@ func ConfigEmbedder(g *genkit.Genkit, ga modelEmbedder, modelName string) (ai.Em
 }
 
 // GenerateOptions returns Gemini-specific generate options (thinking config, Google Search).
-// Keeping *genai.GenerateContentConfig internal avoids leaking provider types into the agent layer.
+// Returns nil when neither feature is requested so no provider-specific config is sent
+// to models that don't support it (e.g. gemini-flash-latest with no thinking support).
 func GenerateOptions(searchEnable bool, thinkingLevel string) []ai.GenerateOption {
 	cfg := &genai.GenerateContentConfig{}
+	hasConfig := false
 
 	if thinkingLevel != "" {
 		var level genai.ThinkingLevel
@@ -78,11 +80,9 @@ func GenerateOptions(searchEnable bool, thinkingLevel string) []ai.GenerateOptio
 		case "MINIMAL":
 			level = genai.ThinkingLevelMinimal
 		}
-
 		if level != "" {
-			cfg.ThinkingConfig = &genai.ThinkingConfig{
-				ThinkingLevel: level,
-			}
+			cfg.ThinkingConfig = &genai.ThinkingConfig{ThinkingLevel: level}
+			hasConfig = true
 		}
 	}
 
@@ -94,6 +94,11 @@ func GenerateOptions(searchEnable bool, thinkingLevel string) []ai.GenerateOptio
 		cfg.ToolConfig = &genai.ToolConfig{
 			IncludeServerSideToolInvocations: &ist,
 		}
+		hasConfig = true
+	}
+
+	if !hasConfig {
+		return nil
 	}
 	return []ai.GenerateOption{ai.WithConfig(cfg)}
 }

@@ -33,3 +33,4 @@ credentials.json
 token.json
 config.yaml
 config.d/
+skill.d/

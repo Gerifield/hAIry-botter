@@ -8,10 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Build
 go build ./...
 
-# Run main server (requires config.yaml in working directory)
+# Run main server (auto-loads config.yaml from working directory)
 go run cmd/server-bot/main.go
 
-# Run with a specific config file
+# Run with a different config file
 go run cmd/server-bot/main.go -config path/to/config.yaml
 
 # Test all packages

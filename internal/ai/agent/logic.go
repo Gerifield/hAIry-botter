@@ -120,19 +120,44 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 			mcpServers = append(mcpServers, cfg)
 		}
 
-		logger.Info("MCP client list is not empty, initializing MCP clients")
-		mcpManager, err := genkitMCP.NewMCPHost(g, genkitMCP.MCPHostOptions{
-			Name:       "hairy-botter-mcp-host",
-			Version:    "1.0.0",
-			MCPServers: mcpServers,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize MCP host: %w", err)
+		logger.Warn("initializing MCP clients", slog.Int("count", len(mcpServers)))
+
+		// NewMCPHost blocks synchronously for each server (connect + initialize) using
+		// context.Background() internally, so we run it in a goroutine with a hard timeout
+		// to prevent an unreachable server from hanging startup indefinitely.
+		type hostResult struct {
+			host *genkitMCP.MCPHost
+		}
+		hostCh := make(chan hostResult, 1)
+		go func() {
+			m, _ := genkitMCP.NewMCPHost(g, genkitMCP.MCPHostOptions{
+				Name:       "hairy-botter-mcp-host",
+				Version:    "1.0.0",
+				MCPServers: mcpServers,
+			})
+			hostCh <- hostResult{m}
+		}()
+
+		const mcpInitTimeout = 30 * time.Second
+		var mcpManager *genkitMCP.MCPHost
+		select {
+		case r := <-hostCh:
+			mcpManager = r.host
+			logger.Warn("MCP host initialized")
+		case <-time.After(mcpInitTimeout):
+			logger.Warn("MCP host initialization timed out, starting without MCP tools", slog.Duration("timeout", mcpInitTimeout))
 		}
 
-		tools, err = mcpManager.GetActiveTools(context.Background(), g)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get active tools from MCP host: %w", err)
+		if mcpManager != nil {
+			logger.Warn("loading MCP tools")
+			toolsCtx, toolsCancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer toolsCancel()
+			var toolsErr error
+			tools, toolsErr = mcpManager.GetActiveTools(toolsCtx, g)
+			if toolsErr != nil {
+				logger.Warn("failed to get MCP tools, continuing without them", slog.String("error", toolsErr.Error()))
+				tools = nil
+			}
 		}
 	}
 
@@ -143,7 +168,7 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 		toolRefs[i] = tool
 		toolNames[i] = tool.Name()
 	}
-	logger.Info("tools loaded", slog.Int("num_tools", len(toolRefs)))
+	logger.Warn("tools loaded", slog.Int("num_tools", len(toolRefs)))
 
 	return &Logic{
 		logger:    logger,

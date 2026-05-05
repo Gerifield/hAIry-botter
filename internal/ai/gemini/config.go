@@ -75,17 +75,19 @@ func GenerateOptions(modelName string, searchEnable bool, thinkingLevel string) 
 		isFlash := strings.Contains(strings.ToLower(modelName), "flash")
 		var level genai.ThinkingLevel
 		switch thinkingLevel {
+		case "NONE", "MINIMAL":
+			// Gemini 3 Flash cannot fully disable thinking; MINIMAL is as low as it goes.
+			// NONE is accepted as an alias so callers can express intent clearly.
+			// Pro models do not support MINIMAL — skip silently for them.
+			if isFlash {
+				level = genai.ThinkingLevelMinimal
+			}
 		case "LOW":
 			level = genai.ThinkingLevelLow
 		case "MEDIUM":
 			level = genai.ThinkingLevelMedium
 		case "HIGH":
 			level = genai.ThinkingLevelHigh
-		case "MINIMAL":
-			if isFlash {
-				level = genai.ThinkingLevelMinimal
-			}
-			// MINIMAL is not supported on Pro models; skip silently.
 		}
 		if level != "" {
 			cfg.ThinkingConfig = &genai.ThinkingConfig{ThinkingLevel: level}

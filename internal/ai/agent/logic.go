@@ -231,12 +231,27 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 	logger.Debug("message parts sending to LLM", slog.Any("parts", userPromptParts))
 	// TODO: We could re-use a flow here maybe, but for simplicity we create a new generate just for each message. We can optimize later if needed.
 
+	toolLogger := logger
 	genOpts := []ai.GenerateOption{
 		ai.WithModel(l.model),
 		ai.WithSystem(l.persona),
 		ai.WithTools(l.toolRefs...),
 		ai.WithToolChoice(ai.ToolChoiceAuto),
 		ai.WithMessages(hist...),
+		ai.WithUse(ai.MiddlewareFunc(func(ctx context.Context) (*ai.Hooks, error) {
+			return &ai.Hooks{
+				WrapTool: func(ctx context.Context, params *ai.ToolParams, next ai.ToolNext) (*ai.MultipartToolResponse, error) {
+					toolLogger.Info("tool call", slog.String("tool", params.Request.Name), slog.Any("input", params.Request.Input))
+					resp, err := next(ctx, params)
+					if err != nil {
+						toolLogger.Warn("tool error", slog.String("tool", params.Request.Name), slog.String("error", err.Error()))
+					} else {
+						toolLogger.Info("tool response", slog.String("tool", params.Request.Name), slog.Any("output", resp.Output))
+					}
+					return resp, err
+				},
+			}, nil
+		})),
 	}
 	genOpts = append(genOpts, l.extraOpts...)
 

@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"hairy-botter/pkg/httpBotter"
+	"hairy-botter/pkg/wsBotter"
 	"io"
 	"net/http"
 	"os"
@@ -86,18 +86,60 @@ func main() {
 }
 
 type Logic struct {
-	httpB      *httpBotter.Logic
+	baseURL    string
 	userLimits []string
-	chatID     int64
+	chatID     int64 // Kept for the httpHandler fallback, but less useful now
 	mu         sync.RWMutex
 	bot        *bot.Bot
+
+	wsClientsMu sync.RWMutex
+	wsClients   map[int64]*wsBotter.WSClient
 }
 
 func New(baseURL string, userLimit []string) *Logic {
 	return &Logic{
-		httpB:      httpBotter.New(baseURL),
+		baseURL:    baseURL,
 		userLimits: userLimit,
+		wsClients:  make(map[int64]*wsBotter.WSClient),
 	}
+}
+
+func (l *Logic) getOrCreateWSClient(chatID int64) *wsBotter.WSClient {
+	l.wsClientsMu.RLock()
+	client, exists := l.wsClients[chatID]
+	l.wsClientsMu.RUnlock()
+
+	if exists {
+		return client
+	}
+
+	l.wsClientsMu.Lock()
+	defer l.wsClientsMu.Unlock()
+
+	// Double check
+	if client, exists := l.wsClients[chatID]; exists {
+		return client
+	}
+
+	sessionID := fmt.Sprintf("tg-%d", chatID)
+	client = wsBotter.New(l.baseURL, sessionID)
+
+	client.OnMessage(func(msg string) {
+		if l.bot == nil {
+			return
+		}
+		_, err := l.bot.SendMessage(context.Background(), &bot.SendMessageParams{
+			ParseMode: models.ParseModeMarkdown,
+			ChatID:    chatID,
+			Text:      bot.EscapeMarkdownUnescaped(msg),
+		})
+		if err != nil {
+			fmt.Println("error sending response back to Telegram via WS callback:", err)
+		}
+	})
+
+	l.wsClients[chatID] = client
+	return client
 }
 
 func (l *Logic) httpHandler(w http.ResponseWriter, r *http.Request) {
@@ -204,21 +246,12 @@ func (l *Logic) Handler(ctx context.Context, b *bot.Bot, update *models.Update) 
 		}
 	}
 
-	fmt.Println("Sending message to AI service:", msg)
-	res, err := l.httpB.Send(fmt.Sprintf("tg-%d", update.Message.Chat.ID), msg, payloads)
-	if err != nil {
-		fmt.Println("error sending message to AI service:", err)
-		return
-	}
+	fmt.Println("Sending message to AI service via WS:", msg)
 
-	fmt.Println("AI service response:", res)
-	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
-		ParseMode: models.ParseModeMarkdown,
-		ChatID:    update.Message.Chat.ID,
-		Text:      bot.EscapeMarkdownUnescaped(res),
-	})
+	wsClient := l.getOrCreateWSClient(update.Message.Chat.ID)
+	err := wsClient.Send(msg, payloads)
 	if err != nil {
-		fmt.Println("error sending response back to Telegram:", err)
+		fmt.Println("error sending message to AI service via WS:", err)
 		return
 	}
 

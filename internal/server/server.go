@@ -26,6 +26,7 @@ type Server struct {
 	srv   *http.Server
 	logic ai
 	cfg   Config
+	cm    *ConnectionManager
 }
 
 // New .
@@ -36,6 +37,7 @@ func New(addr string, aiLogic ai, cfg Config) *Server {
 		srv:   &http.Server{Addr: addr, Handler: h},
 		logic: aiLogic,
 		cfg:   cfg,
+		cm:    NewConnectionManager(),
 	}
 	s.addRoutes()
 
@@ -44,6 +46,7 @@ func New(addr string, aiLogic ai, cfg Config) *Server {
 
 func (s *Server) addRoutes() {
 	s.h.Post("/message", s.postMessage)
+	s.h.Get("/ws/{session_id}", s.handleWebSocket)
 
 	// CORS preflight request handler
 	s.h.Options("/*", func(w http.ResponseWriter, r *http.Request) {

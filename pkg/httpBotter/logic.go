@@ -8,7 +8,18 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
+	"strings"
 )
+
+// HTTPError represents an error returned by the HTTP server.
+type HTTPError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("HTTP %d: %s", e.StatusCode, e.Body)
+}
 
 // Logic .
 type Logic struct {
@@ -83,6 +94,10 @@ func (l *Logic) Send(userID string, msg string, payloads [][]byte) (string, erro
 	if resp.StatusCode != http.StatusOK {
 		// Debug the response body
 		fmt.Println(string(bytes.TrimSpace(b)))
+		return "", &HTTPError{
+			StatusCode: resp.StatusCode,
+			Body:       strings.TrimSpace(string(b)),
+		}
 	}
 
 	//err = json.NewDecoder(resp.Body).Decode(&response)

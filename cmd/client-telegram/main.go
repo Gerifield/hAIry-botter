@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hairy-botter/pkg/httpBotter"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -204,10 +206,55 @@ func (l *Logic) Handler(ctx context.Context, b *bot.Bot, update *models.Update) 
 		}
 	}
 
+	// Start typing indicator in a background goroutine
+	doneCh := make(chan struct{})
+	go func() {
+		// Send immediately once
+		_, _ = b.SendChatAction(ctx, &bot.SendChatActionParams{
+			ChatID: update.Message.Chat.ID,
+			Action: models.ChatActionTyping,
+		})
+
+		ticker := time.NewTicker(4 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				_, _ = b.SendChatAction(ctx, &bot.SendChatActionParams{
+					ChatID: update.Message.Chat.ID,
+					Action: models.ChatActionTyping,
+				})
+			case <-doneCh:
+				return
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
 	fmt.Println("Sending message to AI service:", msg)
 	res, err := l.httpB.Send(fmt.Sprintf("tg-%d", update.Message.Chat.ID), msg, payloads)
+
+	// Stop typing indicator
+	close(doneCh)
+
 	if err != nil {
 		fmt.Println("error sending message to AI service:", err)
+
+		var httpErr *httpBotter.HTTPError
+		if errors.As(err, &httpErr) {
+			errorMsg := fmt.Sprintf("Sorry, I encountered an error while processing your message.\nHTTP %d: %s", httpErr.StatusCode, httpErr.Body)
+			_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: update.Message.Chat.ID,
+				Text:   errorMsg,
+			})
+		} else {
+			_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+				ChatID: update.Message.Chat.ID,
+				Text:   "Sorry, I encountered an internal error while processing your message.",
+			})
+		}
 		return
 	}
 

@@ -12,6 +12,19 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+func parseLogLevel(s string) slog.Level {
+	switch s {
+	case "debug":
+		return slog.LevelDebug
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
+}
+
 func main() {
 	var port string
 	var baseDir string
@@ -20,13 +33,20 @@ func main() {
 	var disableWriteFile bool
 	var disableExecuteCommand bool
 
+	var logLevel string
+
 	flag.StringVar(&port, "port", "", "Port to listen on (default 8081 or PORT env var)")
 	flag.StringVar(&baseDir, "base-dir", "", "Base directory for file operations (default . or BASE_DIR env var)")
+	flag.StringVar(&logLevel, "log-level", "", "Log level: debug, info, warn, error (default info or LOG_LEVEL env var)")
 	flag.BoolVar(&disableListFiles, "disable-list-files", false, "Disable the list_files tool (or DISABLE_LIST_FILES env var)")
 	flag.BoolVar(&disableReadFile, "disable-read-file", false, "Disable the read_file tool (or DISABLE_READ_FILE env var)")
 	flag.BoolVar(&disableWriteFile, "disable-write-file", false, "Disable the write_file tool (or DISABLE_WRITE_FILE env var)")
 	flag.BoolVar(&disableExecuteCommand, "disable-execute-command", false, "Disable the execute_command tool (or DISABLE_EXECUTE_COMMAND env var)")
 	flag.Parse()
+
+	if logLevel == "" {
+		logLevel = os.Getenv("LOG_LEVEL")
+	}
 
 	if port == "" {
 		port = os.Getenv("PORT")
@@ -54,7 +74,7 @@ func main() {
 		disableExecuteCommand = os.Getenv("DISABLE_EXECUTE_COMMAND") == "true" || os.Getenv("DISABLE_EXECUTE_COMMAND") == "1"
 	}
 
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: parseLogLevel(logLevel)})))
 
 	srv := server.NewMCPServer("Skills Server", "0.0.1")
 

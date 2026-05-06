@@ -68,7 +68,7 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 		mcpServers := make([]genkitMCP.MCPServerConfig, 0, len(inputMCPServers))
 		for i, srv := range inputMCPServers {
 			cfg := genkitMCP.MCPServerConfig{
-				Name: fmt.Sprintf("mcp-client-%d", i), // Unique name for each client
+				Name: fmt.Sprintf("mcp-%d", i),
 			}
 
 			serverType := srv.Type
@@ -120,44 +120,23 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 			mcpServers = append(mcpServers, cfg)
 		}
 
-		logger.Warn("initializing MCP clients", slog.Int("count", len(mcpServers)))
+		logger.Info("initializing MCP clients", slog.Int("count", len(mcpServers)))
 
-		// NewMCPHost blocks synchronously for each server (connect + initialize) using
-		// context.Background() internally, so we run it in a goroutine with a hard timeout
-		// to prevent an unreachable server from hanging startup indefinitely.
-		type hostResult struct {
-			host *genkitMCP.MCPHost
-		}
-		hostCh := make(chan hostResult, 1)
-		go func() {
-			m, _ := genkitMCP.NewMCPHost(g, genkitMCP.MCPHostOptions{
-				Name:       "hairy-botter-mcp-host",
-				Version:    "1.0.0",
-				MCPServers: mcpServers,
-			})
-			hostCh <- hostResult{m}
-		}()
+		mcpManager, _ := genkitMCP.NewMCPHost(g, genkitMCP.MCPHostOptions{
+			Name:       "hairy-botter-mcp-host",
+			Version:    "1.0.0",
+			MCPServers: mcpServers,
+		})
+		logger.Info("MCP host initialized")
 
-		const mcpInitTimeout = 30 * time.Second
-		var mcpManager *genkitMCP.MCPHost
-		select {
-		case r := <-hostCh:
-			mcpManager = r.host
-			logger.Warn("MCP host initialized")
-		case <-time.After(mcpInitTimeout):
-			logger.Warn("MCP host initialization timed out, starting without MCP tools", slog.Duration("timeout", mcpInitTimeout))
-		}
-
-		if mcpManager != nil {
-			logger.Warn("loading MCP tools")
-			toolsCtx, toolsCancel := context.WithTimeout(context.Background(), 15*time.Second)
-			defer toolsCancel()
-			var toolsErr error
-			tools, toolsErr = mcpManager.GetActiveTools(toolsCtx, g)
-			if toolsErr != nil {
-				logger.Warn("failed to get MCP tools, continuing without them", slog.String("error", toolsErr.Error()))
-				tools = nil
-			}
+		logger.Info("loading MCP tools")
+		toolsCtx, toolsCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer toolsCancel()
+		var toolsErr error
+		tools, toolsErr = mcpManager.GetActiveTools(toolsCtx, g)
+		if toolsErr != nil {
+			logger.Warn("failed to get MCP tools, continuing without them", slog.String("error", toolsErr.Error()))
+			tools = nil
 		}
 	}
 

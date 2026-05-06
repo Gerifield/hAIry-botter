@@ -71,6 +71,7 @@ All configuration lives in `config.yaml`. Copy `config.yaml.example` to `config.
 run_mode: "agent"          # "agent" (HTTP server) or "mcp_cli" (stdio sub-agent)
 model: "gemini-flash-latest"
 gemini_search_disabled: false
+gemini_thinking_level: "NONE"  # omit to use model default
 log_level: "info"
 
 personality:
@@ -96,6 +97,8 @@ capabilities:
     - type: cli                        # launched as child process via stdio
       path: "go"
       args: ["run", "cmd/server-mcp-skills/main.go"]
+      env:                             # optional extra env vars for the subprocess
+        BASE_DIR: "/workspace"
 
 context:
   auto_inject:              # files appended to the system prompt at startup
@@ -107,9 +110,11 @@ api_keys:
 
 See `config.yaml.example` for the full reference with all options and comments.
 
-> **Note on MCP:** Tool names must be unique across all connected MCP servers — duplicate names override each other.
+> **Note on MCP:** Tools from each MCP server are automatically namespaced by their index (e.g. `mcp-0_chat`, `mcp-1_chat`), so identical tool names across different servers don't collide. The uniqueness constraint only applies to tools defined manually via `genkit.DefineTool`.
 
 > **Note on Search + MCP:** Google Search grounding and MCP tools work simultaneously on Gemini 2.5+ models. Disable search with `gemini_search_disabled: true`.
+
+> **Note on Thinking:** `gemini_thinking_level` controls the model's internal reasoning budget. `NONE` and `MINIMAL` map to the lowest setting and are only valid for Flash models (Pro models silently ignore them). Pro models support `LOW`, `MEDIUM`, and `HIGH`. Omit the field entirely to use the model's default budget.
 
 ---
 

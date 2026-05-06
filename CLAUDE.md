@@ -193,4 +193,5 @@ The `chat` tool description is dynamically built from `agent_name`, `agent_descr
 - Google Search grounding and MCP tools can be active simultaneously on Gemini 2.5+ models.
 - Google Search grounding is Gemini-specific; passed via `ai.WithConfig(&genai.GenerateContentConfig{...})` inside `gemini.GenerateOptions()`.
 - The genkit fork used is `gerifield/genkit/go v1.5.0-fix` (replace directive in go.mod).
-- Tool registration is global per Genkit instance — do not register the same tool name twice.
+- Tool registration is global per Genkit instance — do not register the same tool name twice (applies to manually defined tools via `genkit.DefineTool`).
+- MCP tools loaded via `GetActiveTools` are automatically namespaced by server index (e.g. `mcp-0_chat`, `mcp-1_chat`), so identical tool names across different MCP servers do not collide.

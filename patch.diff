@@ -1,0 +1,89 @@
+--- cmd/client-telegram/main.go
++++ cmd/client-telegram/main.go
+@@ -239,58 +239,21 @@
+		}
+	}
+
+-<<<<<<< HEAD
+-	fmt.Println("Sending message to AI service via WS:", msg)
+-=======
+-	// Start typing indicator in a background goroutine
+-	doneCh := make(chan struct{})
+-	go func() {
+-		// Send immediately once
+-		_, _ = b.SendChatAction(ctx, &bot.SendChatActionParams{
+-			ChatID: update.Message.Chat.ID,
+-			Action: models.ChatActionTyping,
+-		})
+-
+-		ticker := time.NewTicker(4 * time.Second)
+-		defer ticker.Stop()
+-
+-		for {
+-			select {
+-			case <-ticker.C:
+-				_, _ = b.SendChatAction(ctx, &bot.SendChatActionParams{
+-					ChatID: update.Message.Chat.ID,
+-					Action: models.ChatActionTyping,
+-				})
+-			case <-doneCh:
+-				return
+-			case <-ctx.Done():
+-				return
+-			}
+-		}
+-	}()
+-
+-	fmt.Println("Sending message to AI service:", msg)
+-	res, err := l.httpB.Send(fmt.Sprintf("tg-%d", update.Message.Chat.ID), msg, payloads)
+-
+-	// Stop typing indicator
+-	close(doneCh)
+-
+-	if err != nil {
+-		fmt.Println("error sending message to AI service:", err)
+-
+-		var httpErr *httpBotter.HTTPError
+-		if errors.As(err, &httpErr) {
+-			errorMsg := fmt.Sprintf("Sorry, I encountered an error while processing your message.\nHTTP %d: %s", httpErr.StatusCode, httpErr.Body)
+-			_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+-				ChatID: update.Message.Chat.ID,
+-				Text:   errorMsg,
+-			})
+-		} else {
+-			_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+-				ChatID: update.Message.Chat.ID,
+-				Text:   "Sorry, I encountered an internal error while processing your message.",
+-			})
+-		}
+-		return
+-	}
+->>>>>>> origin/main
+-
+-	wsClient := l.getOrCreateWSClient(update.Message.Chat.ID)
+-	err := wsClient.Send(msg, payloads)
+-	if err != nil {
+-		fmt.Println("error sending message to AI service via WS:", err)
+-		return
+-	}
++	// Send immediately once, let it timeout natively via telegram
++	_, _ = b.SendChatAction(ctx, &bot.SendChatActionParams{
++		ChatID: update.Message.Chat.ID,
++		Action: models.ChatActionTyping,
++	})
++
++	fmt.Println("Sending message to AI service via WS:", msg)
++
++	wsClient := l.getOrCreateWSClient(update.Message.Chat.ID)
++	err := wsClient.Send(msg, payloads)
++	if err != nil {
++		fmt.Println("error sending message to AI service via WS:", err)
++
++		errorMsg := fmt.Sprintf("Sorry, I encountered an error while processing your message.\nWebSocket Error: %s", err.Error())
++		_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
++			ChatID: update.Message.Chat.ID,
++			Text:   errorMsg,
++		})
++
++		return
++	}

@@ -245,6 +245,11 @@ func (l *Logic) Handler(ctx context.Context, b *bot.Bot, update *models.Update) 
 			msg = update.Message.Caption
 		}
 	}
+	// Send immediately once, let it timeout natively via telegram
+	_, _ = b.SendChatAction(ctx, &bot.SendChatActionParams{
+		ChatID: update.Message.Chat.ID,
+		Action: models.ChatActionTyping,
+	})
 
 	fmt.Println("Sending message to AI service via WS:", msg)
 
@@ -252,6 +257,13 @@ func (l *Logic) Handler(ctx context.Context, b *bot.Bot, update *models.Update) 
 	err := wsClient.Send(msg, payloads)
 	if err != nil {
 		fmt.Println("error sending message to AI service via WS:", err)
+
+		errorMsg := fmt.Sprintf("Sorry, I encountered an error while processing your message.\nWebSocket Error: %s", err.Error())
+		_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: update.Message.Chat.ID,
+			Text:   errorMsg,
+		})
+
 		return
 	}
 

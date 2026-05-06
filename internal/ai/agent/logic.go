@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	"hairy-botter/internal/ai/domain"
 	"hairy-botter/internal/rag"
@@ -54,7 +55,7 @@ func (l *Logic) ToolNames() []string {
 	return l.toolNames
 }
 
-// Persona returns the full system prompt loaded from personality.txt.
+// Persona returns the effective system prompt (role + system_prompt from config.yaml, plus any auto-injected context).
 func (l *Logic) Persona() string {
 	return l.persona
 }
@@ -67,7 +68,7 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 		mcpServers := make([]genkitMCP.MCPServerConfig, 0, len(inputMCPServers))
 		for i, srv := range inputMCPServers {
 			cfg := genkitMCP.MCPServerConfig{
-				Name: fmt.Sprintf("mcp-client-%d", i), // Unique name for each client
+				Name: fmt.Sprintf("mcp-%d", i),
 			}
 
 			serverType := srv.Type
@@ -81,7 +82,10 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 
 			if serverType == "http" {
 				cfg.Config = genkitMCP.MCPClientOptions{
-					StreamableHTTP: &genkitMCP.StreamableHTTPConfig{BaseURL: srv.Path},
+					StreamableHTTP: &genkitMCP.StreamableHTTPConfig{
+						BaseURL: srv.Path,
+						Timeout: 15 * time.Second,
+					},
 				}
 			} else if serverType == "cli" {
 				if srv.Path == "" {
@@ -116,19 +120,23 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 			mcpServers = append(mcpServers, cfg)
 		}
 
-		logger.Info("MCP client list is not empty, initializing MCP clients")
-		mcpManager, err := genkitMCP.NewMCPHost(g, genkitMCP.MCPHostOptions{
+		logger.Info("initializing MCP clients", slog.Int("count", len(mcpServers)))
+
+		mcpManager, _ := genkitMCP.NewMCPHost(g, genkitMCP.MCPHostOptions{
 			Name:       "hairy-botter-mcp-host",
 			Version:    "1.0.0",
 			MCPServers: mcpServers,
 		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to initialize MCP host: %w", err)
-		}
+		logger.Info("MCP host initialized")
 
-		tools, err = mcpManager.GetActiveTools(context.Background(), g)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get active tools from MCP host: %w", err)
+		logger.Info("loading MCP tools")
+		toolsCtx, toolsCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer toolsCancel()
+		var toolsErr error
+		tools, toolsErr = mcpManager.GetActiveTools(toolsCtx, g)
+		if toolsErr != nil {
+			logger.Warn("failed to get MCP tools, continuing without them", slog.String("error", toolsErr.Error()))
+			tools = nil
 		}
 	}
 
@@ -139,7 +147,7 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 		toolRefs[i] = tool
 		toolNames[i] = tool.Name()
 	}
-	logger.Info("tools loaded", slog.Int("num_tools", len(toolRefs)))
+	logger.Warn("tools loaded", slog.Int("num_tools", len(toolRefs)))
 
 	return &Logic{
 		logger:    logger,
@@ -202,12 +210,27 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 	logger.Debug("message parts sending to LLM", slog.Any("parts", userPromptParts))
 	// TODO: We could re-use a flow here maybe, but for simplicity we create a new generate just for each message. We can optimize later if needed.
 
+	toolLogger := logger
 	genOpts := []ai.GenerateOption{
 		ai.WithModel(l.model),
 		ai.WithSystem(l.persona),
 		ai.WithTools(l.toolRefs...),
 		ai.WithToolChoice(ai.ToolChoiceAuto),
 		ai.WithMessages(hist...),
+		ai.WithUse(ai.MiddlewareFunc(func(ctx context.Context) (*ai.Hooks, error) {
+			return &ai.Hooks{
+				WrapTool: func(ctx context.Context, params *ai.ToolParams, next ai.ToolNext) (*ai.MultipartToolResponse, error) {
+					toolLogger.Info("tool call", slog.String("tool", params.Request.Name), slog.Any("input", params.Request.Input))
+					resp, err := next(ctx, params)
+					if err != nil {
+						toolLogger.Warn("tool error", slog.String("tool", params.Request.Name), slog.String("error", err.Error()))
+					} else {
+						toolLogger.Info("tool response", slog.String("tool", params.Request.Name), slog.Any("output", resp.Output))
+					}
+					return resp, err
+				},
+			}, nil
+		})),
 	}
 	genOpts = append(genOpts, l.extraOpts...)
 
@@ -215,10 +238,15 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 		genOpts = append(genOpts, ai.WithDocs(ragContextDocs...))
 	}
 
-	resp, err := genkit.Generate(ctx, l.g, genOpts...)
+	genCtx, genCancel := context.WithTimeout(ctx, 120*time.Second)
+	defer genCancel()
+	logger.Info("calling genkit.Generate", slog.String("model", l.model.Name()), slog.Int("history_len", len(hist)), slog.Int("num_tools", len(l.toolRefs)))
+	resp, err := genkit.Generate(genCtx, l.g, genOpts...)
 	if err != nil {
+		logger.Error("genkit.Generate failed", slog.String("error", err.Error()))
 		return "", err
 	}
+	logger.Debug("genkit.Generate succeeded", slog.Int("response_len", len(resp.Text())))
 
 	// Save hist (already includes the user message) plus the model response.
 	// Deliberately avoid resp.History() because genkit may inject RAG docs into the

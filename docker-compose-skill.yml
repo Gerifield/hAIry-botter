@@ -1,4 +1,8 @@
-# docker-compose.yml
+# Full stack with sandboxed skills MCP server + travel planner CLI sub-agent.
+# The bot reads config.yaml from the repo root (bind-mounted read-only).
+# config.d/ and skill.d/ are bind-mounted so the CLI sub-agent launched inside
+# the bot container can reach its config and the wienerlinien skill file.
+# Set GEMINI_API_KEY as an env var or put it in config.yaml under api_keys.gemini.
 version: '3.4'
 services:
   mcp-skill:
@@ -19,13 +23,15 @@ services:
       dockerfile: docker/Dockerfile-bot
       target: production
     environment:
-      MCP_SERVERS: http://mcp-skill:8090/mcp
-    env_file:
-      - .env
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     ports:
       - "8080:8080"
     volumes:
-      - bot-data:/app
+      - ./config.yaml:/app/config.yaml:ro
+      - ./config.d:/app/config.d:ro
+      - ./skill.d:/app/skill.d:ro
+      - bot-history:/app/history-gemini
+      - bot-context:/app/bot-context
     depends_on:
       - mcp-skill
 
@@ -45,4 +51,5 @@ services:
       - bot
 
 volumes:
-  bot-data:
+  bot-history:
+  bot-context:

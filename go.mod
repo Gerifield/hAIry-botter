@@ -1,10 +1,10 @@
 module hairy-botter
 
-go 1.24.3
+go 1.25.0
 
 require (
 	github.com/briandowns/spinner v1.23.2
-	github.com/firebase/genkit/go v1.4.0
+	github.com/firebase/genkit/go v1.7.0
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/go-telegram/bot v1.17.0
 	github.com/google/uuid v1.6.0
@@ -12,7 +12,7 @@ require (
 	github.com/philippgille/chromem-go v0.7.0
 	golang.org/x/oauth2 v0.30.0
 	google.golang.org/api v0.236.0
-	google.golang.org/genai v1.51.0
+	google.golang.org/genai v1.55.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -23,6 +23,7 @@ require (
 	cloud.google.com/go/compute/metadata v0.7.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
+	github.com/coder/websocket v1.8.14 // indirect
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
@@ -60,5 +61,3 @@ require (
 	google.golang.org/grpc v1.73.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 )
-
-replace github.com/firebase/genkit/go => github.com/gerifield/genkit/go v1.5.0-fix

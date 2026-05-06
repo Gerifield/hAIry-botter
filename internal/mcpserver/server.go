@@ -5,6 +5,7 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -38,6 +39,7 @@ type Config struct {
 
 // Server wraps an agent as an MCP sub-agent server.
 type Server struct {
+	logger *slog.Logger
 	logic  agentHandler
 	cfg    Config
 	mcpSrv *server.MCPServer
@@ -50,13 +52,16 @@ type Server struct {
 //     so orchestrators can make routing decisions without an extra info call.
 //
 //   - info() — returns the full Config details as plain text.
-func New(logic agentHandler, cfg Config) *Server {
+func New(logger *slog.Logger, logic agentHandler, cfg Config) *Server {
 	if cfg.Name == "" {
 		cfg.Name = "hairy-botter-agent"
 	}
+	if logger == nil {
+		logger = slog.Default()
+	}
 
 	mcpSrv := server.NewMCPServer(cfg.Name, "1.0.0")
-	s := &Server{logic: logic, cfg: cfg, mcpSrv: mcpSrv}
+	s := &Server{logger: logger, logic: logic, cfg: cfg, mcpSrv: mcpSrv}
 
 	toolList := "none"
 	if len(cfg.ToolNames) > 0 {
@@ -122,14 +127,20 @@ func (s *Server) handleChat(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 		sessionID = uuid.NewString()
 	}
 
+	s.logger.Info("mcp chat called", slog.String("agent", s.cfg.Name), slog.String("session_id", sessionID), slog.String("message", msg))
+
 	resp, err := s.logic.HandleMessage(ctx, sessionID, domain.Request{Message: msg})
 	if err != nil {
+		s.logger.Error("mcp chat failed", slog.String("agent", s.cfg.Name), slog.String("session_id", sessionID), slog.String("error", err.Error()))
 		return mcp.NewToolResultError(fmt.Sprintf("agent error: %v", err)), nil
 	}
+
+	s.logger.Info("mcp chat completed", slog.String("agent", s.cfg.Name), slog.String("session_id", sessionID))
 	return mcp.NewToolResultText(resp), nil
 }
 
 func (s *Server) handleInfo(_ context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	s.logger.Info("mcp info called", slog.String("agent", s.cfg.Name))
 	toolList := "none"
 	if len(s.cfg.ToolNames) > 0 {
 		toolList = strings.Join(s.cfg.ToolNames, ", ")

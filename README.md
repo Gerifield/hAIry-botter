@@ -26,7 +26,8 @@ Whether you are building a CLI, a Telegram bot, or a web interface, you just nee
 * 🔌 **MCP Support:** Implements the **Model Context Protocol** to call external servers/functions via Genkit's MCP plugin (includes example implementation).
 * 💾 **Smart History:** Session-based history storage (`history-gemini` folder) with optional auto-summarization to save context window.
 * 📚 **RAG Capable:** Built-in Retrieval-Augmented Generation. Drop text documents into the `bot-context` folder to chat with your data.
-* 🎭 **Custom Personality:** Configurable system prompt via `personality.txt`.
+* 🎭 **Custom Personality:** Role and system prompt defined directly in `config.yaml`.
+* 🤖 **Multi-agent / Sub-agent:** Agents can expose themselves as MCP servers (HTTP or stdio) so an orchestrator can delegate tasks to specialised sub-agents, each with its own config, model, and tool set.
 * 🖼️ **Multi-modal:** Native support for Image and PDF inputs.
 * 🚀 **Ready-to-use Clients:** Includes CLI, Telegram, and Facebook Messenger clients.
 
@@ -38,9 +39,8 @@ Whether you are building a CLI, a Telegram bot, or a web interface, you just nee
 
 The easiest way to get up and running is via Docker Compose.
 
-1.  Copy `.env.example` to `.env`.
-2.  Set your `GEMINI_API_KEY` in the file.
-3.  Run the stack:
+1.  Copy `config.yaml.example` to `config.yaml` and set your `api_keys.gemini` value.
+2.  Run the stack:
 
 ```bash
 docker-compose up
@@ -50,11 +50,13 @@ docker-compose up
 
 **Prerequisites:** Go installed on your machine.
 
-1.  Set the required environment variable:
-    ```bash
-    export GEMINI_API_KEY="your_api_key_here"
+1.  Copy `config.yaml.example` to `config.yaml` and set your Gemini API key:
+    ```yaml
+    api_keys:
+      gemini: "your_api_key_here"
     ```
-2.  Run the server:
+    Alternatively, set the `GEMINI_API_KEY` environment variable — it is used as a fallback when the key is absent from the file.
+2.  Run the server (it auto-loads `config.yaml` from the working directory):
     ```bash
     go run cmd/server-bot/main.go
     ```
@@ -63,24 +65,56 @@ docker-compose up
 
 ## ⚙️ Configuration
 
-You can configure the server using Environment Variables.
+All configuration lives in `config.yaml`. Copy `config.yaml.example` to `config.yaml` and edit it. A different path can be supplied with `-config <path>`.
 
-| Variable | Description | Default | Required |
-| :--- | :--- | :--- | :---: |
-| `GEMINI_API_KEY` | Your Google Gemini API access key. | - | ✅ |
-| `ADDR` | Server listen address. | `:8080` | ❌ |
-| `GEMINI_MODEL` | The specific model version to use. | `gemini-flash-latest` | ❌ |
-| `MCP_SERVERS` | Comma-separated list of MCP HTTP stream servers (e.g., `http://localhost:8081/mcp`). | - | ❌ |
-| `GEMINI_SEARCH_DISABLED` | Set to `true` or `1` to disable Google Search grounding. Search is **enabled by default**. | `false` | ❌ |
-| `HISTORY_SUMMARY` | Message count trigger for history summarization (`0` to disable). | `20` | ❌ |
-| `LOG_LEVEL` | Logging verbosity (`debug`, `info`, `warn`, `error`). | `info` | ❌ |
-| `CORS_ALLOWED_ORIGIN` | CORS allowed origin header. | `*` | ❌ |
-| `CORS_ALLOWED_METHODS` | CORS allowed methods header. | `POST, OPTIONS` | ❌ |
-| `CORS_ALLOWED_HEADERS` | CORS allowed headers header. | `Content-Type, X-User-ID` | ❌ |
+```yaml
+run_mode: "agent"          # "agent" (HTTP server) or "mcp_cli" (stdio sub-agent)
+model: "gemini-flash-latest"
+gemini_search_disabled: false
+gemini_thinking_level: "NONE"  # omit to use model default
+log_level: "info"
 
-> **Note on MCP:** You cannot use the same function name across different MCP servers. Since functions are mapped to clients, duplicate names will override previous ones.
+personality:
+  role: "Helpful assistant"
+  system_prompt: "You are hAIry, a concise and friendly AI assistant."
 
-> **Note on Search + MCP:** Google Search grounding and MCP tools can now be used **simultaneously**. On Gemini 3.0 models, both are active at the same time — the model can call your MCP tools and ground responses in live search results within the same conversation. To opt out of search, set `GEMINI_SEARCH_DISABLED=true`.
+agent_config:
+  enable_chat_proxy: true   # expose POST /message
+  http_port: ":8080"
+  enable_mcp_http: false    # expose this agent as an MCP server
+  mcp_port: ":8081"
+
+capabilities:
+  rag:
+    enabled: true
+    directory: "./bot-context"
+  history_summary:
+    enabled: true
+    message_count: 20
+  mcp_servers:
+    - type: http
+      path: http://localhost:8082/mcp
+    - type: cli                        # launched as child process via stdio
+      path: "go"
+      args: ["run", "cmd/server-mcp-skills/main.go"]
+      env:                             # optional extra env vars for the subprocess
+        BASE_DIR: "/workspace"
+
+context:
+  auto_inject:              # files appended to the system prompt at startup
+    - "TODO.md"
+
+api_keys:
+  gemini: ""                # or set GEMINI_API_KEY env var as fallback
+```
+
+See `config.yaml.example` for the full reference with all options and comments.
+
+> **Note on MCP:** Tools from each MCP server are automatically namespaced by their index (e.g. `mcp-0_chat`, `mcp-1_chat`), so identical tool names across different servers don't collide. The uniqueness constraint only applies to tools defined manually via `genkit.DefineTool`.
+
+> **Note on Search + MCP:** Google Search grounding and MCP tools work simultaneously on Gemini 2.5+ models. Disable search with `gemini_search_disabled: true`.
+
+> **Note on Thinking:** `gemini_thinking_level` controls the model's internal reasoning budget. `NONE` and `MINIMAL` map to the lowest setting and are only valid for Flash models (Pro models silently ignore them). Pro models support `LOW`, `MEDIUM`, and `HIGH`. Omit the field entirely to use the model's default budget.
 
 ---
 
@@ -170,13 +204,17 @@ go run cmd/client-fb-messenger/main.go
 
 ## 🎭 Personality
 
-The bot's system prompt is loaded from a `personality.txt` file in the working directory. It is plain text — just write your system prompt directly, no JSON wrapping needed.
+The system prompt is defined directly in `config.yaml` under the `personality` section:
 
-```
-You are a helpful assistant named hAIry. Be concise and friendly.
+```yaml
+personality:
+  role: "Senior Go Developer"
+  system_prompt: "You are an autonomous coding agent. Always check TODO.md before writing code."
 ```
 
-> **Note:** Previous versions used `personality.json` with a JSON structure. This file must be migrated to plain text.
+Both fields are concatenated to form the effective system prompt. Additional context files can be appended at startup via `context.auto_inject`.
+
+> **Note:** Previous versions used a separate `personality.txt` file. This has been removed — move your prompt into `config.yaml`.
 
 ---
 

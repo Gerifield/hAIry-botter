@@ -1,6 +1,8 @@
 package gemini
 
 import (
+	"strings"
+
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/core/api"
 	"github.com/firebase/genkit/go/genkit"
@@ -28,23 +30,22 @@ func ConfigPlugin(apiKey string) AgentConfigurator {
 
 // ConfigModel .
 func ConfigModel(g *genkit.Genkit, ga modelDefiner, modelName string) (ai.Model, error) {
-	geminiModelOptions := (*ai.ModelOptions)(nil)
 	if modelName == "" {
-		modelName = "gemini-flash-latest" // Always use the latest flash model by default
-		geminiModelOptions = &ai.ModelOptions{
-			Label:    "Gemini Flash Latest",
-			Versions: []string{},
+		modelName = "gemini-flash-latest"
+	}
+
+	// Try the known-model path first (nil opts = look up from plugin's registry).
+	// -latest aliases and next-gen model names are not in the registry, so fall back
+	// to generic multimodal options so the caller still gets a usable model.
+	model, err := ga.DefineModel(g, modelName, nil)
+	if err != nil {
+		model, err = ga.DefineModel(g, modelName, &ai.ModelOptions{
 			Supports: &googlegenai.Multimodal,
 			Stage:    ai.ModelStageUnstable,
-		}
+		})
 	}
 
-	model, err := ga.DefineModel(g, modelName, geminiModelOptions)
-	if err != nil {
-		return nil, err
-	}
-
-	return model, nil
+	return model, err
 }
 
 // ConfigEmbedder .
@@ -62,27 +63,35 @@ func ConfigEmbedder(g *genkit.Genkit, ga modelEmbedder, modelName string) (ai.Em
 }
 
 // GenerateOptions returns Gemini-specific generate options (thinking config, Google Search).
-// Keeping *genai.GenerateContentConfig internal avoids leaking provider types into the agent layer.
-func GenerateOptions(searchEnable bool, thinkingLevel string) []ai.GenerateOption {
+// Returns nil when neither feature is requested so no provider-specific config is sent
+// to models that don't support it (e.g. older flash models without thinking support).
+// modelName is used to filter out thinking levels unsupported by the specific model variant:
+// MINIMAL is only valid for Flash models (e.g. gemini-2.5-flash); Pro models only support LOW/MEDIUM/HIGH.
+func GenerateOptions(modelName string, searchEnable bool, thinkingLevel string) []ai.GenerateOption {
 	cfg := &genai.GenerateContentConfig{}
+	hasConfig := false
 
 	if thinkingLevel != "" {
+		isFlash := strings.Contains(strings.ToLower(modelName), "flash")
 		var level genai.ThinkingLevel
 		switch thinkingLevel {
+		case "NONE", "MINIMAL":
+			// Gemini 3 Flash cannot fully disable thinking; MINIMAL is as low as it goes.
+			// NONE is accepted as an alias so callers can express intent clearly.
+			// Pro models do not support MINIMAL — skip silently for them.
+			if isFlash {
+				level = genai.ThinkingLevelMinimal
+			}
 		case "LOW":
 			level = genai.ThinkingLevelLow
 		case "MEDIUM":
 			level = genai.ThinkingLevelMedium
 		case "HIGH":
 			level = genai.ThinkingLevelHigh
-		case "MINIMAL":
-			level = genai.ThinkingLevelMinimal
 		}
-
 		if level != "" {
-			cfg.ThinkingConfig = &genai.ThinkingConfig{
-				ThinkingLevel: level,
-			}
+			cfg.ThinkingConfig = &genai.ThinkingConfig{ThinkingLevel: level}
+			hasConfig = true
 		}
 	}
 
@@ -94,6 +103,11 @@ func GenerateOptions(searchEnable bool, thinkingLevel string) []ai.GenerateOptio
 		cfg.ToolConfig = &genai.ToolConfig{
 			IncludeServerSideToolInvocations: &ist,
 		}
+		hasConfig = true
+	}
+
+	if !hasConfig {
+		return nil
 	}
 	return []ai.GenerateOption{ai.WithConfig(cfg)}
 }

@@ -54,6 +54,8 @@ func main() {
 		disableExecuteCommand = os.Getenv("DISABLE_EXECUTE_COMMAND") == "true" || os.Getenv("DISABLE_EXECUTE_COMMAND") == "1"
 	}
 
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
+
 	srv := server.NewMCPServer("Skills Server", "0.0.1")
 
 	// Register List Files Tool

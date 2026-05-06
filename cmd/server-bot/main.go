@@ -68,6 +68,7 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(logOut, &slog.HandlerOptions{
 		Level: parseLogLevel(cfg.LogLevel),
 	}))
+	slog.SetDefault(logger)
 
 	if cfg.RunMode != "agent" && cfg.RunMode != "mcp_cli" {
 		logger.Error("invalid run_mode in config", slog.String("run_mode", cfg.RunMode))
@@ -98,6 +99,7 @@ func main() {
 			})
 		}
 	}
+	logger.Info("MCP servers from config", slog.Int("count", len(mcpServers)))
 
 	searchEnable := !cfg.GeminiSearchDisabled
 
@@ -110,7 +112,7 @@ func main() {
 		logger.Error("failed to define model", slog.String("err", err.Error()))
 		return
 	}
-	customModelConfig := gemini.GenerateOptions(searchEnable, cfg.GeminiThinkingLevel)
+	customModelConfig := gemini.GenerateOptions(cfg.Model, searchEnable, cfg.GeminiThinkingLevel)
 
 	embedder, err := gemini.ConfigEmbedder(g, ga, "gemini-embedding-001")
 	if err != nil {
@@ -121,7 +123,7 @@ func main() {
 
 	var ragL *rag.Logic
 	if cfg.Capabilities.Rag.Enabled && cfg.Capabilities.Rag.Directory != "" {
-		ragL, err = rag.New(logger, cfg.Capabilities.Rag.Directory, rag.EmbeddingFunc(adapters.NewEmbedder(g, embedder)))
+		ragL, err = rag.New(logger, cfg.Capabilities.Rag.Directory, adapters.NewEmbedder(g, embedder))
 		if err != nil {
 			logger.Error("failed to create RAG logic", slog.String("err", err.Error()))
 			return
@@ -163,7 +165,7 @@ func main() {
 			agentDesc = firstLine(aiLogic.Persona())
 		}
 
-		mcpSrv := mcpserver.New(aiLogic, mcpserver.Config{
+		mcpSrv := mcpserver.New(logger, aiLogic, mcpserver.Config{
 			Name:        agentName,
 			Description: agentDesc,
 			ToolNames:   aiLogic.ToolNames(),
@@ -189,7 +191,7 @@ func main() {
 			agentDesc = firstLine(aiLogic.Persona())
 		}
 
-		mcpSrv := mcpserver.New(aiLogic, mcpserver.Config{
+		mcpSrv := mcpserver.New(logger, aiLogic, mcpserver.Config{
 			Name:        agentName,
 			Description: agentDesc,
 			ToolNames:   aiLogic.ToolNames(),

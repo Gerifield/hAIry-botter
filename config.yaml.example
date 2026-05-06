@@ -22,7 +22,7 @@ agent_config:
 # ---------------------------------------------------------
 # 3. Universal Settings (Evaluated by all modes)
 # ---------------------------------------------------------
-model: "gemini-pro-latest"
+model: "gemini-flash-latest"
 gemini_search_disabled: true # Gemini specific config
 log_level: warning
 

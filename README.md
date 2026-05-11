@@ -29,7 +29,7 @@ Whether you are building a CLI, a Telegram bot, or a web interface, you just nee
 * 🎭 **Custom Personality:** Role and system prompt defined directly in `config.yaml`.
 * 🤖 **Multi-agent / Sub-agent:** Agents can expose themselves as MCP servers (HTTP or stdio) so an orchestrator can delegate tasks to specialised sub-agents, each with its own config, model, and tool set.
 * 🖼️ **Multi-modal:** Native support for Image and PDF inputs.
-* 🚀 **Ready-to-use Clients:** Includes CLI, Telegram, and Facebook Messenger clients.
+* 🚀 **Ready-to-use Clients:** Includes CLI, Telegram, Facebook Messenger, WhatsApp, and Gmail clients.
 
 ---
 
@@ -178,14 +178,20 @@ go run cmd/client-cli/main.go
 ### ✈️ Telegram Bot
 Requires a Bot Token from BotFather.
 
+**Env Variables:**
+* `BOT_TOKEN` (Required)
+* `AI_SERVICE` (Default: `http://127.0.0.1:8080`)
+* `USERNAME_LIMITS` (Optional, comma-separated — restrict access to specific usernames)
+* `PORT` (Default: `8085`) — HTTP webhook port for push notifications to the bot
+
 ```bash
 export BOT_TOKEN="your_telegram_token"
 # Optional: restrict access to specific usernames
-export USERNAME_LIMITS="user1,user2" 
+export USERNAME_LIMITS="user1,user2"
 
 go run cmd/client-telegram/main.go
 ```
-*Tip: Captions on images are treated as the prompt.*
+*Tip: Captions on images are treated as the prompt. The bot also exposes an HTTP endpoint (`POST /`) on `PORT` to forward messages into the active Telegram chat.*
 
 ### 💬 Facebook Messenger
 Requires a configured Facebook App/Page.
@@ -199,6 +205,32 @@ Requires a configured Facebook App/Page.
 go run cmd/client-fb-messenger/main.go
 ```
 *Tip: Use `ngrok http 8082` to expose this to Facebook for local testing.*
+
+### 💬 WhatsApp
+Requires a WhatsApp Business account and Graph API credentials.
+
+**Env Variables:**
+* `ACCESS_TOKEN`, `VERIFY_TOKEN`, `APP_SECRET`, `WHATSAPP_BUSINESS_PHONE_ID` (Required)
+* `GRAPHQL_URL` (Optional — Meta Graph API base URL)
+* `ADDR` (Default: `:8082`)
+* `AI_SERVICE` (Default: `http://127.0.0.1:8080`)
+
+```bash
+go run cmd/client-whatsapp/main.go
+```
+
+### 📧 Gmail Reader
+Polls a Gmail mailbox and forwards matching emails to the AI server as messages.
+
+**Env Variables:**
+* `WEBHOOK_URL` (Optional — AI server URL to forward emails to)
+* `SEARCH_QUERY` (Optional — Gmail search filter, default targets `label:Assistant` or a specific address)
+* `POLLING_INTERVAL` (Optional — polling frequency in seconds, default `60`)
+
+```bash
+go run cmd/gmail-reader/main.go
+```
+*Requires OAuth2 credentials for Gmail API access.*
 
 ---
 
@@ -233,6 +265,17 @@ The repo includes a dedicated MCP (Model Context Protocol) server designed to gi
 - `list_files`: List files and directories within a given path.
 - `read_file`: Read the contents of a specific file.
 - `write_file`: Write or overwrite the contents of a file.
+
+**Configuration (flags or env vars):**
+* `-port` / `PORT` — listen port (default `8081`)
+* `-base-dir` / `BASE_DIR` — sandbox root directory (default `.`)
+* `-log-level` / `LOG_LEVEL` — log verbosity: `debug`, `info`, `warn`, `error` (default `info`)
+
+**Disabling individual tools:**
+* `-disable-list-files` / `DISABLE_LIST_FILES=true`
+* `-disable-read-file` / `DISABLE_READ_FILE=true`
+* `-disable-write-file` / `DISABLE_WRITE_FILE=true`
+* `-disable-execute-command` / `DISABLE_EXECUTE_COMMAND=true`
 
 **Running the Skills Server:**
 To run the full stack with the Skills MCP Server enabled, use the dedicated compose file:

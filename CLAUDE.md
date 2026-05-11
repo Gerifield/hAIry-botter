@@ -68,6 +68,11 @@ Orchestrator agent (agent mode, cheap model)
 | `internal/history` | JSON session history; summarizes when length exceeds threshold |
 | `internal/rag` | chromem-go vector DB — loads directory configured in `capabilities.rag.directory` |
 | `cmd/server-mcp-skills` | Sandboxed skills MCP server (file I/O, shell commands) |
+| `cmd/client-telegram` | Telegram bot client — forwards messages to `/message`, exposes HTTP push endpoint |
+| `cmd/client-fb-messenger` | Facebook Messenger webhook client |
+| `cmd/client-whatsapp` | WhatsApp Business webhook client |
+| `cmd/client-cli` | Interactive CLI REPL for local testing |
+| `cmd/gmail-reader` | Gmail poller — forwards matching emails to AI server |
 
 ### Configuration (`config.yaml`)
 
@@ -186,10 +191,31 @@ The `chat` tool description is dynamically built from `agent_name`, `agent_descr
 - JSON field is `content` (not `parts` — old genai SDK format is incompatible; delete old files when upgrading).
 - Only `[user message, model response]` pairs are saved — RAG context docs are intentionally excluded to avoid bloating history and summaries.
 
+### RAG
+
+- Processed files are renamed with a `.loaded` suffix (not deleted) so they are skipped on subsequent startups.
+- Vector DB is persisted to `<rag_directory>/database.db` on shutdown and reloaded on startup.
+- Default retrieval limit is top-3 documents per query.
+- Skips `.gitkeep`, `*.loaded`, and `database.db` during directory scan.
+
+### Skills MCP server (`cmd/server-mcp-skills`)
+
+All settings are available as both CLI flags and env vars:
+
+| Flag | Env var | Default | Purpose |
+|---|---|---|---|
+| `-port` | `PORT` | `8081` | Listen port |
+| `-base-dir` | `BASE_DIR` | `.` | Sandbox root for file operations |
+| `-log-level` | `LOG_LEVEL` | `info` | Log verbosity (`debug`/`info`/`warn`/`error`) |
+| `-disable-list-files` | `DISABLE_LIST_FILES` | `false` | Disable `list_files` tool |
+| `-disable-read-file` | `DISABLE_READ_FILE` | `false` | Disable `read_file` tool |
+| `-disable-write-file` | `DISABLE_WRITE_FILE` | `false` | Disable `write_file` tool |
+| `-disable-execute-command` | `DISABLE_EXECUTE_COMMAND` | `false` | Disable `execute_command` tool |
+
 ### Genkit specifics
 
 - `genkit.Init` panics on failure (does not return error).
-- For known Gemini models: `ga.DefineModel(g, name, nil)`. For unknown models: provide `*ai.ModelOptions{Supports: &googlegenai.Multimodal}`.
+- For known Gemini models: `ga.DefineModel(g, name, nil)`. For unknown models: provide `*ai.ModelOptions{Supports: &googlegenai.Multimodal, Stage: ai.ModelStageUnstable}`.
 - Google Search grounding and MCP tools can be active simultaneously on Gemini 2.5+ models.
 - Google Search grounding is Gemini-specific; passed via `ai.WithConfig(&genai.GenerateContentConfig{...})` inside `gemini.GenerateOptions()`.
 - The genkit fork used is `gerifield/genkit/go v1.5.0-fix` (replace directive in go.mod).

@@ -22,20 +22,22 @@ type Config struct {
 
 // Server .
 type Server struct {
-	h     *chi.Mux
-	srv   *http.Server
-	logic ai
-	cfg   Config
+	h       *chi.Mux
+	srv     *http.Server
+	logic   ai
+	cfg     Config
+	connMgr *ConnectionManager
 }
 
 // New .
 func New(addr string, aiLogic ai, cfg Config) *Server {
 	h := chi.NewMux()
 	s := &Server{
-		h:     h,
-		srv:   &http.Server{Addr: addr, Handler: h},
-		logic: aiLogic,
-		cfg:   cfg,
+		h:       h,
+		srv:     &http.Server{Addr: addr, Handler: h},
+		logic:   aiLogic,
+		cfg:     cfg,
+		connMgr: newConnectionManager(),
 	}
 	s.addRoutes()
 
@@ -44,6 +46,7 @@ func New(addr string, aiLogic ai, cfg Config) *Server {
 
 func (s *Server) addRoutes() {
 	s.h.Post("/message", s.postMessage)
+	s.h.Get("/ws/{session_id}", s.wsHandler)
 
 	// CORS preflight request handler
 	s.h.Options("/*", func(w http.ResponseWriter, r *http.Request) {
@@ -52,6 +55,11 @@ func (s *Server) addRoutes() {
 		w.Header().Set("Access-Control-Allow-Headers", s.cfg.AllowedHeaders)
 		w.WriteHeader(http.StatusOK)
 	})
+}
+
+// Broadcast sends an event message to all WebSocket clients connected to sessionID.
+func (s *Server) Broadcast(ctx context.Context, sessionID string, msg any) {
+	s.connMgr.Broadcast(ctx, sessionID, msg)
 }
 
 // Start .

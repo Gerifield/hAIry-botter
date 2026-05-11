@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/briandowns/spinner v1.23.2
+	github.com/coder/websocket v1.8.14
 	github.com/firebase/genkit/go v1.7.0
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/go-telegram/bot v1.17.0
@@ -23,7 +24,6 @@ require (
 	cloud.google.com/go/compute/metadata v0.7.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
-	github.com/coder/websocket v1.8.14 // indirect
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect

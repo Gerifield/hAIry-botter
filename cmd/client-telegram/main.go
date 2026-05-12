@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"hairy-botter/pkg/httpBotter"
 	"io"
 	"net/http"
 	"os"
@@ -12,21 +10,18 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
-)
 
-// Send any text message to the bot after the bot has been started
+	"hairy-botter/pkg/wsBotter"
+)
 
 func main() {
 	token := os.Getenv("BOT_TOKEN")
 	if token == "" {
 		fmt.Println("BOT_TOKEN must be set")
-
 		os.Exit(1)
-		return
 	}
 
 	aiSrv := os.Getenv("AI_SERVICE")
@@ -35,8 +30,8 @@ func main() {
 	}
 
 	usernameLimits := make([]string, 0)
-	if usernameLimitsEnv := os.Getenv("USERNAME_LIMITS"); usernameLimitsEnv != "" {
-		for _, u := range strings.Split(usernameLimitsEnv, ",") {
+	if env := os.Getenv("USERNAME_LIMITS"); env != "" {
+		for _, u := range strings.Split(env, ",") {
 			usernameLimits = append(usernameLimits, strings.TrimSpace(u))
 		}
 	}
@@ -52,9 +47,7 @@ func main() {
 	b, err := bot.New(token, opts...)
 	if err != nil {
 		fmt.Println(err)
-
 		os.Exit(1)
-		return
 	}
 
 	l.bot = b
@@ -81,27 +74,68 @@ func main() {
 
 	b.Start(ctx)
 
-	// Graceful shutdown of HTTP server
+	l.closeAll()
+
 	if err := srv.Shutdown(context.Background()); err != nil {
 		fmt.Println("HTTP server shutdown error:", err)
 	}
 }
 
+// Logic holds per-instance state for the Telegram bot.
 type Logic struct {
-	httpB      *httpBotter.Logic
+	aiSrv      string
 	userLimits []string
-	chatID     int64
-	mu         sync.RWMutex
 	bot        *bot.Bot
+
+	// chatID is tracked so the push-notification HTTP handler can deliver
+	// messages to the most recently active chat.
+	mu     sync.RWMutex
+	chatID int64
+
+	// sessions maps "tg-{chatID}" → open WebSocket connection.
+	sessionMu sync.Mutex
+	sessions  map[string]*wsBotter.ConnectedClient
 }
 
-func New(baseURL string, userLimit []string) *Logic {
+// New creates a Logic ready to be wired to a Telegram bot.
+func New(aiSrv string, userLimit []string) *Logic {
 	return &Logic{
-		httpB:      httpBotter.New(baseURL),
+		aiSrv:      aiSrv,
 		userLimits: userLimit,
+		sessions:   make(map[string]*wsBotter.ConnectedClient),
 	}
 }
 
+// session returns the cached WebSocket connection for sessionID, dialling a
+// new one if necessary.
+func (l *Logic) session(ctx context.Context, sessionID string) (*wsBotter.ConnectedClient, error) {
+	l.sessionMu.Lock()
+	defer l.sessionMu.Unlock()
+
+	if c, ok := l.sessions[sessionID]; ok {
+		return c, nil
+	}
+
+	c, err := wsBotter.Dial(ctx, l.aiSrv, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	l.sessions[sessionID] = c
+	return c, nil
+}
+
+// closeAll closes every open WebSocket session (called on shutdown).
+func (l *Logic) closeAll() {
+	l.sessionMu.Lock()
+	defer l.sessionMu.Unlock()
+	for id, c := range l.sessions {
+		c.Close()
+		delete(l.sessions, id)
+	}
+}
+
+// httpHandler lets external systems push a message to the most-recently-active
+// Telegram chat via POST / with a `payload` form field.
 func (l *Logic) httpHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -128,7 +162,6 @@ func (l *Logic) httpHandler(w http.ResponseWriter, r *http.Request) {
 		ChatID:    chatID,
 		Text:      bot.EscapeMarkdownUnescaped(payload),
 	})
-
 	if err != nil {
 		fmt.Println("Error sending HTTP payload to Telegram:", err)
 		http.Error(w, "Failed to send message to Telegram", http.StatusInternalServerError)
@@ -136,31 +169,28 @@ func (l *Logic) httpHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Message sent successfully"))
+	_, _ = w.Write([]byte("Message sent successfully"))
 }
 
-// Handler .
+// Handler is the Telegram bot update handler.
 func (l *Logic) Handler(ctx context.Context, b *bot.Bot, update *models.Update) {
 	if update.Message == nil {
 		return
 	}
 
-	// If we have any limits set, check them
 	if len(l.userLimits) > 0 {
-		found := false
+		allowed := false
 		for _, u := range l.userLimits {
 			if update.Message.From.Username == u {
-				found = true
+				allowed = true
 				break
 			}
 		}
-
-		if !found {
+		if !allowed {
 			_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
 				ChatID: update.Message.Chat.ID,
-				Text:   "🙅You are not allowed to use this bot.",
+				Text:   "You are not allowed to use this bot.",
 			})
-
 			return
 		}
 	}
@@ -169,25 +199,21 @@ func (l *Logic) Handler(ctx context.Context, b *bot.Bot, update *models.Update) 
 	l.chatID = update.Message.Chat.ID
 	l.mu.Unlock()
 
-	var payloads [][]byte
+	chatID := update.Message.Chat.ID
+	sessionID := fmt.Sprintf("tg-%d", chatID)
+
+	var payloads []wsBotter.InlineData
 	msg := update.Message.Text
 
 	if len(update.Message.Photo) > 0 {
-		highResImg := biggestImage(update.Message.Photo)
-		fmt.Println("photo file ID:", highResImg.FileID)
-		fmt.Printf("photo info: W: %d, H: %d, Size: %d\n", highResImg.Width, highResImg.Height, highResImg.FileSize)
-		fmt.Println("caption:", update.Message.Caption)
-		f, err := b.GetFile(ctx, &bot.GetFileParams{
-			FileID: highResImg.FileID,
-		})
+		photo := biggestImage(update.Message.Photo)
+		f, err := b.GetFile(ctx, &bot.GetFileParams{FileID: photo.FileID})
 		if err != nil {
 			fmt.Println("error getting file:", err)
 			return
 		}
 
-		// Download the file
-		dlURL := b.FileDownloadLink(f)
-		resp, err := http.Get(dlURL)
+		resp, err := http.Get(b.FileDownloadLink(f))
 		if err != nil {
 			fmt.Println("error downloading file:", err)
 			return
@@ -199,89 +225,70 @@ func (l *Logic) Handler(ctx context.Context, b *bot.Bot, update *models.Update) 
 			fmt.Println("error reading file:", err)
 			return
 		}
-		payloads = append(payloads, data)
+
+		payloads = append(payloads, wsBotter.InlineData{
+			MimeType: http.DetectContentType(data),
+			Data:     data,
+		})
 
 		if update.Message.Caption != "" {
 			msg = update.Message.Caption
 		}
 	}
 
-	// Start typing indicator in a background goroutine
-	doneCh := make(chan struct{})
-	go func() {
-		// Send immediately once
-		_, _ = b.SendChatAction(ctx, &bot.SendChatActionParams{
-			ChatID: update.Message.Chat.ID,
-			Action: models.ChatActionTyping,
+	// Send a single typing action; Telegram shows it for ~5 s then it expires
+	// automatically — no need for a background loop.
+	_, _ = b.SendChatAction(ctx, &bot.SendChatActionParams{
+		ChatID: chatID,
+		Action: models.ChatActionTyping,
+	})
+
+	wsClient, err := l.session(ctx, sessionID)
+	if err != nil {
+		fmt.Println("error connecting to AI service:", err)
+		_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: chatID,
+			Text:   "Sorry, I could not connect to the AI service.",
 		})
+		return
+	}
 
-		ticker := time.NewTicker(4 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				_, _ = b.SendChatAction(ctx, &bot.SendChatActionParams{
-					ChatID: update.Message.Chat.ID,
-					Action: models.ChatActionTyping,
-				})
-			case <-doneCh:
-				return
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	fmt.Println("Sending message to AI service:", msg)
-	res, err := l.httpB.Send(fmt.Sprintf("tg-%d", update.Message.Chat.ID), msg, payloads)
-
-	// Stop typing indicator
-	close(doneCh)
-
+	res, err := wsClient.Send(ctx, msg, payloads)
 	if err != nil {
 		fmt.Println("error sending message to AI service:", err)
 
-		var httpErr *httpBotter.HTTPError
-		if errors.As(err, &httpErr) {
-			errorMsg := fmt.Sprintf("Sorry, I encountered an error while processing your message.\nHTTP %d: %s", httpErr.StatusCode, httpErr.Body)
-			_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID: update.Message.Chat.ID,
-				Text:   errorMsg,
-			})
-		} else {
-			_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
-				ChatID: update.Message.Chat.ID,
-				Text:   "Sorry, I encountered an internal error while processing your message.",
-			})
-		}
+		// Invalidate the broken connection so the next request re-dials.
+		l.sessionMu.Lock()
+		delete(l.sessions, sessionID)
+		l.sessionMu.Unlock()
+
+		_, _ = b.SendMessage(ctx, &bot.SendMessageParams{
+			ChatID: chatID,
+			Text:   fmt.Sprintf("Sorry, I encountered an error: %v", err),
+		})
 		return
 	}
 
 	fmt.Println("AI service response:", res)
 	_, err = b.SendMessage(ctx, &bot.SendMessageParams{
 		ParseMode: models.ParseModeMarkdown,
-		ChatID:    update.Message.Chat.ID,
+		ChatID:    chatID,
 		Text:      bot.EscapeMarkdownUnescaped(res),
 	})
 	if err != nil {
 		fmt.Println("error sending response back to Telegram:", err)
-		return
 	}
-
 }
 
 func biggestImage(photos []models.PhotoSize) models.PhotoSize {
 	if len(photos) == 0 {
 		return models.PhotoSize{}
 	}
-
 	biggest := photos[0]
 	for _, photo := range photos {
 		if photo.FileSize > biggest.FileSize {
 			biggest = photo
 		}
 	}
-
 	return biggest
 }

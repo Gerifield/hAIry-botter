@@ -7,9 +7,12 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
+	"strings"
 	"time"
 
 	"hairy-botter/internal/ai/domain"
+	"hairy-botter/internal/config"
 	"hairy-botter/internal/rag"
 
 	"github.com/firebase/genkit/go/ai"
@@ -36,10 +39,10 @@ type contextKey string
 type Logic struct {
 	logger *slog.Logger
 
-	g       *genkit.Genkit
-	model   ai.Model
-	history historyLogic
-	persona string
+	g            *genkit.Genkit
+	model        ai.Model
+	history      historyLogic
+	systemPrompt string
 
 	toolRefs  []ai.ToolRef
 	toolNames []string
@@ -47,6 +50,9 @@ type Logic struct {
 
 	// RAG related fields
 	ragL *rag.Logic
+
+	// Configured context for static and dynamic data loading
+	contextConfig config.ContextConfig
 }
 
 // ToolNames returns the names of every tool this agent has access to.
@@ -55,13 +61,13 @@ func (l *Logic) ToolNames() []string {
 	return l.toolNames
 }
 
-// Persona returns the effective system prompt (role + system_prompt from config.yaml, plus any auto-injected context).
-func (l *Logic) Persona() string {
-	return l.persona
+// SystemPrompt returns the effective system prompt (role + system_prompt from config.yaml, plus any auto-injected context).
+func (l *Logic) SystemPrompt() string {
+	return l.systemPrompt
 }
 
 // New .
-func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyLogic, inputMCPServers []MCPServer, ragL *rag.Logic, persona string, extraOpts []ai.GenerateOption) (*Logic, error) {
+func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyLogic, inputMCPServers []MCPServer, ragL *rag.Logic, systemPrompt string, extraOpts []ai.GenerateOption, contextConfig config.ContextConfig) (*Logic, error) {
 	var tools []ai.Tool
 
 	if len(inputMCPServers) > 0 {
@@ -150,15 +156,16 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 	logger.Warn("tools loaded", slog.Int("num_tools", len(toolRefs)))
 
 	return &Logic{
-		logger:    logger,
-		g:         g,
-		model:     model,
-		history:   history,
-		persona:   persona,
-		toolRefs:  toolRefs,
-		toolNames: toolNames,
-		extraOpts: extraOpts,
-		ragL:      ragL,
+		logger:        logger,
+		g:             g,
+		model:         model,
+		history:       history,
+		systemPrompt:  systemPrompt,
+		toolRefs:      toolRefs,
+		toolNames:     toolNames,
+		extraOpts:     extraOpts,
+		ragL:          ragL,
+		contextConfig: contextConfig,
 	}, nil
 }
 
@@ -207,13 +214,16 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 	userPromptParts = append(userPromptParts, ai.NewTextPart(req.Message))
 	hist = append(hist, ai.NewUserMessage(userPromptParts...))
 
-	logger.Debug("message parts sending to LLM", slog.Any("parts", userPromptParts))
+	// Inject static and dynamic information into the system prompt
+	finalSystemPrompt := injectSystemPrompt(logger, l.systemPrompt, l.contextConfig)
+
+	logger.Debug("message parts sending to LLM", slog.Any("parts", userPromptParts), slog.String("system_prompt", finalSystemPrompt))
 	// TODO: We could re-use a flow here maybe, but for simplicity we create a new generate just for each message. We can optimize later if needed.
 
 	toolLogger := logger
 	genOpts := []ai.GenerateOption{
 		ai.WithModel(l.model),
-		ai.WithSystem(l.persona),
+		ai.WithSystem(finalSystemPrompt),
 		ai.WithTools(l.toolRefs...),
 		ai.WithToolChoice(ai.ToolChoiceAuto),
 		ai.WithMessages(hist...),
@@ -255,4 +265,41 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 	err = l.history.Save(ctx, sessionID, toSave)
 
 	return resp.Text(), err
+}
+
+func injectSystemPrompt(logger *slog.Logger, systemPrompt string, contextConfig config.ContextConfig) string {
+	var contextInjector strings.Builder
+	// Inject static data first
+	for _, file := range contextConfig.StaticInject {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			logger.Warn("failed to load auto-inject file", slog.String("file", file), slog.String("error", err.Error()))
+			continue
+		}
+		contextInjector.WriteString(fmt.Sprintf("\n\n[File: %s]\n%s", file, string(content)))
+	}
+
+	// Inject dynamic data
+	for _, dd := range contextConfig.DynamicData {
+		var cmd *exec.Cmd
+		if len(dd.Args) > 0 {
+			// Option A: Direct Execution (Safer, handles spaces in args perfectly)
+			// Best for: date, weather-bin --city "New York"
+			cmd = exec.Command(dd.Command, dd.Args...)
+		} else {
+			// Option B: Shell Magic (Allows pipes and redirects)
+			// Best for: "ls | grep .go"
+			cmd = exec.Command("sh", "-c", dd.Command)
+		}
+
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			logger.Warn("failed to inject auto-inject", slog.String("name", dd.Name), slog.String("error", err.Error()))
+			continue
+		}
+		contextInjector.WriteString(fmt.Sprintf("\n\n[%s] %s", dd.Name, strings.TrimSpace(string(out))))
+	}
+	contextInjector.WriteString("\n")
+
+	return systemPrompt + contextInjector.String()
 }

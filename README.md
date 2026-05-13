@@ -101,8 +101,14 @@ capabilities:
         BASE_DIR: "/workspace"
 
 context:
-  auto_inject:              # files appended to the system prompt at startup
+  static_inject:            # files re-read and injected into the system prompt on every request
     - "TODO.md"
+  dynamic_data:             # commands run on every request; output injected into the system prompt
+    - name: "Current date"  # command only → runs via sh -c (supports pipes/redirects)
+      command: "date"
+    - name: "Weather"       # command + args → direct execution (handles spaces in args correctly)
+      command: "weather-bin"
+      args: ["--city", "New York"]
 
 api_keys:
   gemini: ""                # or set GEMINI_API_KEY env var as fallback
@@ -244,7 +250,7 @@ personality:
   system_prompt: "You are an autonomous coding agent. Always check TODO.md before writing code."
 ```
 
-Both fields are concatenated to form the effective system prompt. Additional context files can be appended at startup via `context.auto_inject`.
+Both fields are concatenated to form the base system prompt. Additional context is appended on every request via `context.static_inject` (files) and `context.dynamic_data` (commands). Dynamic commands run via `sh -c` when no `args` are given (supports pipes/redirects), or directly when `args` are provided (safer for arguments with spaces).
 
 > **Note:** Previous versions used a separate `personality.txt` file. This has been removed — move your prompt into `config.yaml`.
 

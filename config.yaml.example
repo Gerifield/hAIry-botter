@@ -56,12 +56,27 @@ capabilities:
 # 4. Context Management
 # ---------------------------------------------------------
 context:
-  # "Magic files" automatically read from disk and injected into the prompt
-  # on wake-up. Leave empty (`[]`) for subagents to save context space.
-  auto_inject:
+  # Files re-read from disk and injected into the system prompt on every request.
+  # Leave empty (`[]`) for stateless sub-agents to save context space.
+  static_inject:
     - "TODO.md"           # The active task state
     - "hairy-botter.md"   # Static repository rules and architecture map
     - "memory.md"         # Long-term crystallized facts
+
+  # Shell commands executed on every request; output is appended to the system prompt.
+  # Useful for injecting dynamic data like the current time, git status, etc.
+  #
+  # Two execution modes:
+  #   - command only: runs via `sh -c <command>` — supports pipes, redirects, shell syntax
+  #   - command + args: runs directly (safer, handles spaces in arguments correctly)
+  dynamic_data:
+    - name: "Current date"
+      command: "date"
+    # - name: "Git status"
+    #   command: "git status --short"
+    # - name: "Weather"
+    #   command: "weather-bin"
+    #   args: ["--city", "New York"]
 
 # ---------------------------------------------------------
 # API Keys (Fallback config, can be overridden by env vars)

@@ -69,7 +69,15 @@ type MCPServerConfig struct {
 
 // ContextConfig specifies files to inject automatically.
 type ContextConfig struct {
-	AutoInject []string `yaml:"auto_inject"`
+	StaticInject []string            `yaml:"static_inject"`
+	DynamicData  []DynamicDataConfig `yaml:"dynamic_data"`
+}
+
+// DynamicDataConfig .
+type DynamicDataConfig struct {
+	Name    string   `yaml:"name"`
+	Command string   `yaml:"command"`
+	Args    []string `yaml:"args"`
 }
 
 // APIKeysConfig holds API keys to prioritize yaml over env

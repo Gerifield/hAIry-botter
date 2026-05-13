@@ -135,18 +135,8 @@ func main() {
 		Summarizer:     adapters.NewSummarizer(g, model),
 	})
 
-	var autoInjectContent strings.Builder
-	for _, file := range cfg.Context.AutoInject {
-		content, err := os.ReadFile(file)
-		if err != nil {
-			logger.Warn("failed to load auto-inject file", slog.String("file", file), slog.String("error", err.Error()))
-			continue
-		}
-		autoInjectContent.WriteString(fmt.Sprintf("\n\n[System Context - File: %s]\n%s", file, string(content)))
-	}
-
-	personaStr := cfg.Personality.Role + "\n" + cfg.Personality.SystemPrompt + autoInjectContent.String()
-	aiLogic, err := agent.New(logger, g, model, hist, mcpServers, ragL, personaStr, customModelConfig)
+	systemPrompt := cfg.Personality.Role + "\n" + cfg.Personality.SystemPrompt
+	aiLogic, err := agent.New(logger, g, model, hist, mcpServers, ragL, systemPrompt, customModelConfig, cfg.Context)
 	if err != nil {
 		logger.Error("failed to create AI logic", slog.String("err", err.Error()))
 
@@ -162,7 +152,7 @@ func main() {
 		}
 		agentDesc := cfg.AgentConfig.AgentDescription
 		if agentDesc == "" {
-			agentDesc = firstLine(aiLogic.Persona())
+			agentDesc = firstLine(aiLogic.SystemPrompt())
 		}
 
 		mcpSrv := mcpserver.New(logger, aiLogic, mcpserver.Config{
@@ -188,7 +178,7 @@ func main() {
 		}
 		agentDesc := cfg.AgentConfig.AgentDescription
 		if agentDesc == "" {
-			agentDesc = firstLine(aiLogic.Persona())
+			agentDesc = firstLine(aiLogic.SystemPrompt())
 		}
 
 		mcpSrv := mcpserver.New(logger, aiLogic, mcpserver.Config{

@@ -60,7 +60,7 @@ Orchestrator agent (agent mode, cheap model)
 |---|---|
 | `cmd/server-bot` | Entry point — loads `config.yaml`, wires all dependencies |
 | `internal/config` | YAML config loading with env var fallback for API keys |
-| `internal/ai/agent` | Core AI logic: history + RAG + Genkit generate; exposes `Persona()`, `ToolNames()` |
+| `internal/ai/agent` | Core AI logic: history + RAG + Genkit generate; exposes `SystemPrompt()`, `ToolNames()` |
 | `internal/ai/adapters` | Genkit adapters: `NewEmbedder()` → `rag.EmbeddingFunc`, `NewSummarizer()` → `history.Summarizer` |
 | `internal/ai/gemini` | Genkit plugin setup (model, embedder, Google Search + thinking config) |
 | `internal/mcpserver` | MCP transport over `agent.Logic` — `Start()` (HTTP) or `StartStdio()` (CLI) |
@@ -109,7 +109,7 @@ All configuration lives in `config.yaml`. Pass a different path with `-config <p
 | `role` | Short role label (e.g. `"Senior Go Developer"`) |
 | `system_prompt` | Full system prompt text |
 
-The concatenation of `role + "\n" + system_prompt + auto_inject_content` is the effective system prompt sent to the model. `agent_description` defaults to the first non-empty line of this combined string if not set explicitly.
+The concatenation of `role + "\n" + system_prompt` is the base system prompt. On every request, `context.static_inject` files and `context.dynamic_data` command outputs are appended before sending to the model. `agent_description` defaults to the first non-empty line of the base system prompt if not set explicitly.
 
 #### `capabilities`
 
@@ -133,16 +133,21 @@ capabilities:
 
 `type` is optional — if the path starts with `http` the type defaults to `http`, otherwise `cli`.
 
-#### `context.auto_inject`
+#### `context`
 
 ```yaml
 context:
-  auto_inject:
+  static_inject:
     - "TODO.md"
     - "memory.md"
+  dynamic_data:
+    - name: "Current date"
+      command: "date"
+    - name: "Git status"
+      command: "git status --short"
 ```
 
-Files listed here are read from disk at startup and appended to the system prompt as `[System Context - File: <name>]` blocks. Leave the list empty for stateless sub-agents to save context space.
+`static_inject` files are re-read from disk and appended to the system prompt as `[File: <name>]` blocks on **every request**. `dynamic_data` entries run a command on every request and append the output as `[<name>] <output>`. Two execution modes: `command` only → runs via `sh -c` (supports pipes/redirects); `command` + `args` → direct execution (safer, handles spaces in arguments correctly). Leave both lists empty for stateless sub-agents to save context space.
 
 #### `api_keys`
 

@@ -281,7 +281,18 @@ func injectSystemPrompt(logger *slog.Logger, systemPrompt string, contextConfig 
 
 	// Inject dynamic data
 	for _, dd := range contextConfig.DynamicData {
-		out, err := exec.Command("sh", "-c", dd.Command).CombinedOutput()
+		var cmd *exec.Cmd
+		if len(dd.Args) > 0 {
+			// Option A: Direct Execution (Safer, handles spaces in args perfectly)
+			// Best for: date, weather-bin --city "New York"
+			cmd = exec.Command(dd.Command, dd.Args...)
+		} else {
+			// Option B: Shell Magic (Allows pipes and redirects)
+			// Best for: "ls | grep .go"
+			cmd = exec.Command("sh", "-c", dd.Command)
+		}
+
+		out, err := cmd.CombinedOutput()
 		if err != nil {
 			logger.Warn("failed to inject auto-inject", slog.String("name", dd.Name), slog.String("error", err.Error()))
 			continue

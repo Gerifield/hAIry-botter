@@ -11,7 +11,7 @@ RUN CGO_ENABLED=0 go build -o /go/bin/mcp-skill -ldflags '-w -s' cmd/server-mcp-
 FROM alpine:latest as production
 WORKDIR /app
 
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates curl
 RUN adduser -D -g '' agentuser
 RUN chown agentuser:agentuser /app
 

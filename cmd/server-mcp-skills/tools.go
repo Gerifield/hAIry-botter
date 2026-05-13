@@ -146,19 +146,31 @@ func handleWriteFile(baseDir string) func(context.Context, mcp.CallToolRequest) 
 // handleExecuteCommand creates the handler for executing a shell command.
 func handleExecuteCommand(baseDir string) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		cmdArg := req.GetString("command", "")
-		if cmdArg == "" {
+		command := req.GetString("command", "")
+		if command == "" {
 			return mcp.NewToolResultError("command parameter is required"), nil
 		}
-		slog.InfoContext(ctx, "audit: execute_command called", slog.String("command", cmdArg))
+		args := req.GetStringSlice("args", []string{})
+		slog.InfoContext(ctx, "audit: execute_command called", slog.String("command", command), slog.Any("args", args))
 
 		absBase, err := filepath.Abs(baseDir)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("failed to get absolute base directory: %v", err)), nil
 		}
 
-		cmd := exec.CommandContext(ctx, "sh", "-c", cmdArg)
+		var cmd *exec.Cmd
+		if len(args) > 0 {
+			// Direct Execution: Safest for parameters with spaces
+			// Input: command="ls", args=["-la", "my folder/"]
+			cmd = exec.CommandContext(ctx, command, args...)
+		} else {
+			// Shell Mode: Necessary for pipes (|) and redirects (>)
+			// Input: command="git status | grep .go"
+			cmd = exec.CommandContext(ctx, "sh", "-c", command)
+		}
+
 		cmd.Dir = absBase
+		cmd.Env = os.Environ()
 
 		output, err := cmd.CombinedOutput()
 		if err != nil {

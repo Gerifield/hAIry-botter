@@ -106,8 +106,14 @@ func main() {
 	// Register Execute Command Tool
 	if !disableExecuteCommand {
 		srv.AddTool(mcp.NewTool("execute_command",
-			mcp.WithDescription("Execute a shell command in the base directory and get the output. Supports pipes and redirections via sh -c."),
-			mcp.WithString("command", mcp.Required(), mcp.Description("The shell command to execute.")),
+			mcp.WithDescription("Executes a command. Use 'args' for safe execution with spaces. Use 'command' alone for shell features like pipes/redirects."),
+			mcp.WithString("command",
+				mcp.Required(),
+				mcp.Description("The binary to run (if using args) or the full shell string (if no args)."),
+			),
+			mcp.WithArray("args",
+				mcp.Description("Optional list of arguments. If provided, command is executed directly (not via shell), preventing quoting issues."),
+			),
 		), handleExecuteCommand(baseDir))
 	}
 

@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"hairy-botter/internal/config"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"hairy-botter/internal/ai/domain"
+	"hairy-botter/internal/config"
 	"hairy-botter/internal/rag"
 
 	"github.com/firebase/genkit/go/ai"

@@ -112,6 +112,7 @@ func main() {
 				mcp.Description("The binary to run (if using args) or the full shell string (if no args)."),
 			),
 			mcp.WithArray("args",
+				mcp.Items(map[string]any{"type": "string"}),
 				mcp.Description("Optional list of arguments. If provided, command is executed directly (not via shell), preventing quoting issues."),
 			),
 		), handleExecuteCommand(baseDir))

@@ -1,6 +1,6 @@
 module hairy-botter
 
-go 1.25.0
+go 1.24.3
 
 require (
 	github.com/briandowns/spinner v1.23.2

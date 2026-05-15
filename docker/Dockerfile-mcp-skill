@@ -5,6 +5,7 @@ COPY . .
 
 RUN go mod download
 RUN CGO_ENABLED=0 go build -o /go/bin/mcp-skill -ldflags '-w -s' cmd/server-mcp-skills/main.go cmd/server-mcp-skills/tools.go
+RUN CGO_ENABLED=0 go build -o /go/bin/cachefor -ldflags '-w -s' cmd/cachefor/main.go
 
 
 #FROM gcr.io/distroless/static AS production
@@ -16,6 +17,7 @@ RUN adduser -D -g '' agentuser
 RUN chown agentuser:agentuser /app
 
 COPY --from=build /go/bin/mcp-skill mcp-skill
+COPY --from=build /go/bin/cachefor cachefor
 COPY --from=build /go/src/app/SKILL.md SKILL.md
 
 USER agentuser

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -66,6 +67,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", l.httpHandler)
+	mux.HandleFunc("/{chatID}", l.httpHandler)
 
 	srv := &http.Server{
 		Addr:    ":" + port,
@@ -118,8 +120,17 @@ func (l *Logic) httpHandler(w http.ResponseWriter, r *http.Request) {
 	chatID := l.chatID
 	l.mu.RUnlock()
 
+	// Parse from chat and set it if possible
+	pathChatID := r.PathValue("chatID")
+	if pathChatID != "" {
+		i, err := strconv.ParseInt(pathChatID, 10, 64)
+		if err != nil {
+			chatID = i
+		}
+	}
+
 	if chatID == 0 {
-		http.Error(w, "No active chat found. Please send a message to the bot first.", http.StatusServiceUnavailable)
+		http.Error(w, "No active chat found. Please send a message to the bot first or pass in a chatID.", http.StatusServiceUnavailable)
 		return
 	}
 

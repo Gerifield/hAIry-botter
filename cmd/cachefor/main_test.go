@@ -179,4 +179,42 @@ exit 42
 			t.Errorf("Cache file should have been updated, mod time is %v", stat.ModTime())
 		}
 	})
+
+	t.Run("cleanup old caches", func(t *testing.T) {
+		// Create a dummy old cache file
+		oldCacheFile := "old_test.cache"
+		if err := os.WriteFile(oldCacheFile, []byte("old"), 0644); err != nil {
+			t.Fatalf("Failed to write old cache file: %v", err)
+		}
+
+		// Create a dummy recent cache file
+		recentCacheFile := "recent_test.cache"
+		if err := os.WriteFile(recentCacheFile, []byte("recent"), 0644); err != nil {
+			t.Fatalf("Failed to write recent cache file: %v", err)
+		}
+
+		// Backdate old cache file to be older than 2 * cacheTime (cacheTime will be 1s)
+		oldTime := time.Now().Add(-3 * time.Second)
+		if err := os.Chtimes(oldCacheFile, oldTime, oldTime); err != nil {
+			t.Fatalf("Failed to backdate old cache file: %v", err)
+		}
+
+		// Run the binary to trigger cleanup
+		cmd := exec.Command(binPath, "echo", "cleanup test")
+		cmd.Env = append(os.Environ(), "CACHE_TIME=1s")
+
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+
+		// Verify old cache was deleted
+		if _, err := os.Stat(oldCacheFile); !os.IsNotExist(err) {
+			t.Errorf("Old cache file %s should have been deleted", oldCacheFile)
+		}
+
+		// Verify recent cache was kept
+		if _, err := os.Stat(recentCacheFile); os.IsNotExist(err) {
+			t.Errorf("Recent cache file %s should have been kept", recentCacheFile)
+		}
+	})
 }

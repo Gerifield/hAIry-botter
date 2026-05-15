@@ -13,7 +13,37 @@ import (
 	"time"
 )
 
+func cleanupOldCaches(cacheTime time.Duration) {
+	threshold := 2 * cacheTime
+
+	// Read current directory
+	files, err := os.ReadDir(".")
+	if err != nil {
+		return
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		name := file.Name()
+		if strings.HasSuffix(name, ".cache") {
+			if info, err := file.Info(); err == nil {
+				if time.Since(info.ModTime()) > threshold {
+					// We can just ignore errors here; best effort cleanup
+					_ = os.Remove(name)
+				}
+			}
+		}
+	}
+}
+
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	// Parse cacheTime from environment variable if present
 	envCacheTime := os.Getenv("CACHE_TIME")
 	defaultCacheTime := 5 * time.Minute
@@ -37,8 +67,13 @@ func main() {
 	args := flag.Args()
 	if len(args) == 0 {
 		flag.Usage()
-		os.Exit(1)
+		return 1
 	}
+
+	cacheTime := *cacheTimePtr
+
+	// Make sure we run cleanup before exiting
+	defer cleanupOldCaches(cacheTime)
 
 	// Cache key generation
 	cmdStr := strings.Join(args, " ")
@@ -50,7 +85,6 @@ func main() {
 	errFile := fmt.Sprintf("%s.err.cache", hashStr)
 	exitFile := fmt.Sprintf("%s.exit.cache", hashStr)
 
-	cacheTime := *cacheTimePtr
 	cacheHit := false
 
 	// Hit detection
@@ -83,7 +117,7 @@ func main() {
 			}
 		}
 
-		os.Exit(exitCode)
+		return exitCode
 	} else {
 		// Handle cache miss / execute command
 
@@ -132,6 +166,6 @@ func main() {
 		os.Stdout.Write(outBuf.Bytes())
 		os.Stderr.Write(errBuf.Bytes())
 
-		os.Exit(exitCode)
+		return exitCode
 	}
 }

@@ -37,6 +37,7 @@ capabilities:
   rag:
     enabled: true
     directory: "./knowledge_base"
+    embedding_model: "gemini-embedding-001"
   history_summary:
     enabled: true
     message_count: 20

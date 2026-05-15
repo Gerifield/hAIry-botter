@@ -49,8 +49,9 @@ type CapabilitiesConfig struct {
 
 // RagConfig specifies Retrieval-Augmented Generation settings.
 type RagConfig struct {
-	Enabled   bool   `yaml:"enabled"`
-	Directory string `yaml:"directory"`
+	Enabled        bool   `yaml:"enabled"`
+	Directory      string `yaml:"directory"`
+	EmbeddingModel string `yaml:"embedding_model"`
 }
 
 // HistorySummaryConfig controls conversation history summarization.
@@ -107,8 +108,13 @@ func Load(path string) (*Config, error) {
 	if cfg.Model == "" {
 		cfg.Model = "gemini-flash-latest"
 	}
+
 	if cfg.LogLevel == "" {
 		cfg.LogLevel = "warning"
+	}
+
+	if cfg.Capabilities.Rag.EmbeddingModel == "" {
+		cfg.Capabilities.Rag.EmbeddingModel = "gemini-embedding-001"
 	}
 
 	return &cfg, nil

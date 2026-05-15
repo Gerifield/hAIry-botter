@@ -114,15 +114,17 @@ func main() {
 	}
 	customModelConfig := gemini.GenerateOptions(cfg.Model, searchEnable, cfg.GeminiThinkingLevel)
 
-	embedder, err := gemini.ConfigEmbedder(g, ga, "gemini-embedding-001")
-	if err != nil {
-		logger.Error("failed to define embedder", slog.String("err", err.Error()))
-
-		return
-	}
-
 	var ragL *rag.Logic
 	if cfg.Capabilities.Rag.Enabled && cfg.Capabilities.Rag.Directory != "" {
+		// First load/created embedder config
+		embedder, err := gemini.ConfigEmbedder(g, ga, cfg.Capabilities.Rag.EmbeddingModel)
+		if err != nil {
+			logger.Error("failed to define embedder", slog.String("err", err.Error()))
+
+			return
+		}
+
+		// Init the RAG
 		ragL, err = rag.New(logger, cfg.Capabilities.Rag.Directory, adapters.NewEmbedder(g, embedder))
 		if err != nil {
 			logger.Error("failed to create RAG logic", slog.String("err", err.Error()))

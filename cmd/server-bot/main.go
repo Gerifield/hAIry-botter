@@ -145,6 +145,7 @@ func main() {
 		return
 	}
 
+	var mcpSrv *mcpserver.Server
 	if cfg.RunMode == "mcp_cli" {
 		logger.Info("running in mcp_cli mode, awaiting MCP JSON-RPC over stdio")
 
@@ -157,7 +158,7 @@ func main() {
 			agentDesc = firstLine(aiLogic.SystemPrompt())
 		}
 
-		mcpSrv := mcpserver.New(logger, aiLogic, mcpserver.Config{
+		mcpSrv = mcpserver.New(logger, aiLogic, mcpserver.Config{
 			Name:        agentName,
 			Description: agentDesc,
 			ToolNames:   aiLogic.ToolNames(),
@@ -171,8 +172,6 @@ func main() {
 	}
 
 	// We are in "agent" run mode
-	var srv *server.Server
-
 	if cfg.AgentConfig.EnableMCPHTTP {
 		agentName := cfg.AgentConfig.AgentName
 		if agentName == "" {
@@ -183,7 +182,7 @@ func main() {
 			agentDesc = firstLine(aiLogic.SystemPrompt())
 		}
 
-		mcpSrv := mcpserver.New(logger, aiLogic, mcpserver.Config{
+		mcpSrv = mcpserver.New(logger, aiLogic, mcpserver.Config{
 			Name:        agentName,
 			Description: agentDesc,
 			ToolNames:   aiLogic.ToolNames(),
@@ -200,6 +199,7 @@ func main() {
 		}()
 	}
 
+	var srv *server.Server
 	if cfg.AgentConfig.EnableChatProxy {
 		corsOrigin := cfg.AgentConfig.CORSAllowedOrigin
 		if corsOrigin == "" {
@@ -236,6 +236,13 @@ func main() {
 			err := srv.Stop(context.Background())
 			if err != nil {
 				logger.Error("failed to stop server", slog.String("err", err.Error()))
+			}
+		}
+
+		if mcpSrv != nil {
+			err := mcpSrv.Stop(context.Background())
+			if err != nil {
+				logger.Error("failed to stop MCP server", slog.String("err", err.Error()))
 			}
 		}
 

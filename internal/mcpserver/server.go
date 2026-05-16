@@ -43,6 +43,8 @@ type Server struct {
 	logic  agentHandler
 	cfg    Config
 	mcpSrv *server.MCPServer
+
+	sServer *server.StreamableHTTPServer
 }
 
 // New creates a Server that exposes two MCP tools:
@@ -101,7 +103,7 @@ func New(logger *slog.Logger, logic agentHandler, cfg Config) *Server {
 
 // Start runs the MCP server on addr (e.g. ":8082") using the Streamable HTTP transport.
 func (s *Server) Start(addr string) error {
-	streamSrv := server.NewStreamableHTTPServer(s.mcpSrv,
+	s.sServer = server.NewStreamableHTTPServer(s.mcpSrv,
 		server.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
 			if sid := r.Header.Get("x-session-id"); sid != "" {
 				return context.WithValue(ctx, "x-session-id", sid)
@@ -109,12 +111,18 @@ func (s *Server) Start(addr string) error {
 			return ctx
 		}),
 	)
-	return streamSrv.Start(addr)
+
+	return s.sServer.Start(addr)
 }
 
 // StartStdio runs the MCP server using standard input/output.
 func (s *Server) StartStdio() error {
 	return server.ServeStdio(s.mcpSrv)
+}
+
+// Stop .
+func (s *Server) Stop(ctx context.Context) error {
+	return s.sServer.Shutdown(ctx)
 }
 
 func (s *Server) handleChat(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

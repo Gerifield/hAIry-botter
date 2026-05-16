@@ -55,8 +55,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	_, _ = fmt.Fprintf(os.Stdout, stdOut)
-	_, _ = fmt.Fprintf(os.Stderr, stdErr)
+	_, _ = fmt.Fprint(os.Stdout, stdOut)
+	_, _ = fmt.Fprint(os.Stderr, stdErr)
 
 	// Wait for cleanup
 	<-cleanupDone

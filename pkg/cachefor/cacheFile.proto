@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+option go_package = "github.com/Gerifield/hAIry-botter/pkg/cachefor";
+
+message CacheFile {
+  int64 duration = 1;
+  string stdOut = 2;
+  string stdErr = 3;
+  int64 errCode = 4;
+}

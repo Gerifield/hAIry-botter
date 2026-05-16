@@ -9,7 +9,11 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"google.golang.org/protobuf/proto"
 )
+
+//go:generate protoc --go_out=paths=source_relative:. pkg/cachefor/cacheFile.proto
 
 const cacheFilePattern = "%s.cache"
 
@@ -60,9 +64,18 @@ func (l *Logic) returnCached(command []string, cacheTime time.Duration) (string,
 	}
 
 	if cacheHit {
-		//
-		// TODO: Read, parse and return values
-		//
+		b, err := os.ReadFile(cacheFile)
+		if err != nil {
+			return "", "", 0, err
+		}
+
+		c := &CacheFile{}
+		err = proto.Unmarshal(b, c)
+		if err != nil {
+			return "", "", 0, err
+		}
+
+		return c.StdOut, c.StdErr, int(c.ErrCode), nil
 	}
 
 	return "", "", 0, ErrCacheMiss
@@ -96,15 +109,74 @@ func (l *Logic) runAndCache(command []string, cacheTime time.Duration) (string, 
 		}
 	}
 
-	//
-	// TODO: Add actual caching here
-	//
+	// Convert and save cache file
+	c := &CacheFile{
+		Duration: cacheTime.Nanoseconds(),
+		StdOut:   outBuf.String(),
+		StdErr:   errBuf.String(),
+		ErrCode:  int64(exitCode),
+	}
+
+	// Failed to save, it might be fine to skip this if failed
+	b, err := proto.Marshal(c)
+	if err != nil {
+		return "", "", 0, err
+	}
+
+	cacheFile := fmt.Sprintf(cacheFilePattern, genHash(strings.Join(command, " ")))
+	err = os.WriteFile(cacheFile, b, 0644)
+	if err != nil {
+		return "", "", 0, err
+	}
 
 	return outBuf.String(), errBuf.String(), exitCode, err
 }
 
-// Cleanup .
-func (l *Logic) Cleanup() {}
+// Cleanup checks all .cache files and try to get the duration from them and cleanup
+func (l *Logic) Cleanup() {
+	// Read current directory
+	files, err := os.ReadDir(".")
+	if err != nil {
+		return
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		name := file.Name()
+		var dur time.Duration
+		var durErr error
+		if strings.HasSuffix(name, ".cache") {
+			if info, err := file.Info(); err == nil {
+				// Check duration, ignore the ones we can't read to be safe
+				// We could log the error later
+				dur, durErr = checkSavedDuration(name)
+				if durErr == nil && time.Since(info.ModTime()) > dur {
+					// We can just ignore errors here; best effort cleanup
+					_ = os.Remove(name)
+				}
+			}
+		}
+	}
+}
+
+// checkSavedDuration from file
+func checkSavedDuration(fileName string) (time.Duration, error) {
+	b, err := os.ReadFile(fileName)
+	if err != nil {
+		return 0, err
+	}
+
+	c := &CacheFile{}
+	err = proto.Unmarshal(b, c)
+	if err != nil {
+		return 0, err
+	}
+
+	return time.Duration(c.Duration), nil
+}
 
 // genHash .
 func genHash(command string) string {

@@ -28,25 +28,19 @@ func New() *Logic {
 }
 
 // Execute .
-func (l *Logic) Execute(command []string, cacheTime time.Duration) error {
-
+func (l *Logic) Execute(command []string, cacheTime time.Duration) (string, string, int, error) {
 	stdOut, stdErr, exitCode, err := l.returnCached(command, cacheTime)
 	if err == nil {
-		// No, error, return everything
-		_, _ = fmt.Fprintf(os.Stdout, stdOut)
-		_, _ = fmt.Fprintf(os.Stderr, stdErr)
-		os.Exit(exitCode)
+		return stdOut, stdErr, exitCode, err
 	}
 	// Ignore any other error from the cache miss for now, we can possibly log it maybe later
 
 	stdOut, stdErr, exitCode, err = l.runAndCache(command, cacheTime)
 	if err == nil {
-		_, _ = fmt.Fprintf(os.Stdout, stdOut)
-		_, _ = fmt.Fprintf(os.Stderr, stdErr)
-		os.Exit(exitCode)
+		return stdOut, stdErr, exitCode, err
 	}
 
-	return err
+	return "", "", 0, err
 }
 
 // returnCached checks and loads in a cached value if it exists or not expired

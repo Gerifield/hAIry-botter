@@ -6,7 +6,7 @@ run_mode: "agent"
 
 # ---------------------------------------------------------
 # 2. Agent Mode Options
-# (These are ONLY evaluated if run_mode is "agent")
+# (These are ONLY evaluated if run_mode is "agent" except the name and desc.)
 # ---------------------------------------------------------
 agent_config:
   enable_chat_proxy: true   # The main HTTP UI/Proxy interface

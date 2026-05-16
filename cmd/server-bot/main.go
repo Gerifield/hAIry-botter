@@ -240,7 +240,7 @@ func main() {
 		}
 
 		if mcpSrv != nil {
-			err := mcpSrv.Shutdown(context.Background())
+			err := mcpSrv.Stop(context.Background())
 			if err != nil {
 				logger.Error("failed to stop MCP server", slog.String("err", err.Error()))
 			}

@@ -11,6 +11,7 @@ import (
 type Config struct {
 	RunMode              string             `yaml:"run_mode"`
 	AgentConfig          AgentConfig        `yaml:"agent_config"`
+	Provider             string             `yaml:"provider"`   // gemini (default) | openai
 	Model                string             `yaml:"model"`
 	GeminiSearchDisabled bool               `yaml:"gemini_search_disabled"`
 	GeminiThinkingLevel  string             `yaml:"gemini_thinking_level"`
@@ -18,7 +19,8 @@ type Config struct {
 	Personality          PersonalityConfig  `yaml:"personality"`
 	Capabilities         CapabilitiesConfig `yaml:"capabilities"`
 	Context              ContextConfig      `yaml:"context"`
-	APIKeys              APIKeysConfig      `yaml:"api_keys"` // Keep this distinct for overriding
+	APIKeys              APIKeysConfig      `yaml:"api_keys"` // legacy; merged into Providers on load
+	Providers            ProvidersConfig    `yaml:"providers"`
 }
 
 // AgentConfig holds settings specific to the 'agent' run mode.
@@ -49,9 +51,11 @@ type CapabilitiesConfig struct {
 
 // RagConfig specifies Retrieval-Augmented Generation settings.
 type RagConfig struct {
-	Enabled        bool   `yaml:"enabled"`
-	Directory      string `yaml:"directory"`
-	EmbeddingModel string `yaml:"embedding_model"`
+	Enabled          bool   `yaml:"enabled"`
+	Directory        string `yaml:"directory"`
+	EmbedderProvider string `yaml:"embedder_provider"` // gemini | openai; defaults to top-level provider
+	EmbedderBaseURL  string `yaml:"embedder_base_url"` // overrides provider base_url for the embedder
+	EmbeddingModel   string `yaml:"embedding_model"`
 }
 
 // HistorySummaryConfig controls conversation history summarization.
@@ -81,7 +85,19 @@ type DynamicDataConfig struct {
 	Args    []string `yaml:"args"`
 }
 
-// APIKeysConfig holds API keys to prioritize yaml over env
+// ProvidersConfig holds per-provider credentials and endpoints.
+type ProvidersConfig struct {
+	Gemini ProviderConfig `yaml:"gemini"`
+	OpenAI ProviderConfig `yaml:"openai"`
+}
+
+// ProviderConfig holds the api key and optional base URL for a single provider.
+type ProviderConfig struct {
+	APIKey  string `yaml:"api_key"`
+	BaseURL string `yaml:"base_url"`
+}
+
+// APIKeysConfig holds API keys to prioritize yaml over env (legacy).
 type APIKeysConfig struct {
 	Gemini string `yaml:"gemini"`
 }
@@ -99,22 +115,46 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	// Apply environment variable fallbacks for API keys
-	if cfg.APIKeys.Gemini == "" {
-		cfg.APIKeys.Gemini = os.Getenv("GEMINI_API_KEY")
+	// Migrate legacy api_keys.gemini into providers.gemini.api_key
+	if cfg.APIKeys.Gemini != "" && cfg.Providers.Gemini.APIKey == "" {
+		cfg.Providers.Gemini.APIKey = cfg.APIKeys.Gemini
 	}
 
-	// Set defaults if some values are absent
+	// Apply environment variable fallbacks
+	if cfg.Providers.Gemini.APIKey == "" {
+		cfg.Providers.Gemini.APIKey = os.Getenv("GEMINI_API_KEY")
+	}
+	if cfg.Providers.OpenAI.APIKey == "" {
+		cfg.Providers.OpenAI.APIKey = os.Getenv("OPENAI_API_KEY")
+	}
+
+	// Set defaults
+	if cfg.Provider == "" {
+		cfg.Provider = "gemini"
+	}
+
 	if cfg.Model == "" {
-		cfg.Model = "gemini-flash-latest"
+		if cfg.Provider == "openai" {
+			cfg.Model = "gpt-4o"
+		} else {
+			cfg.Model = "gemini-flash-latest"
+		}
 	}
 
 	if cfg.LogLevel == "" {
 		cfg.LogLevel = "warning"
 	}
 
+	if cfg.Capabilities.Rag.EmbedderProvider == "" {
+		cfg.Capabilities.Rag.EmbedderProvider = cfg.Provider
+	}
+
 	if cfg.Capabilities.Rag.EmbeddingModel == "" {
-		cfg.Capabilities.Rag.EmbeddingModel = "gemini-embedding-001"
+		if cfg.Capabilities.Rag.EmbedderProvider == "openai" {
+			cfg.Capabilities.Rag.EmbeddingModel = "text-embedding-3-small"
+		} else {
+			cfg.Capabilities.Rag.EmbeddingModel = "gemini-embedding-001"
+		}
 	}
 
 	return &cfg, nil

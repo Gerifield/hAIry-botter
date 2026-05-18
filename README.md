@@ -4,7 +4,7 @@
 
 # hAIry Botter 🪄 ✨
 
-**A flexible, HTTP-based AI Chatbot Server powered by Gemini via Firebase Genkit.**
+**A flexible, HTTP-based AI Chatbot Server powered by Firebase Genkit. Supports Gemini and OpenAI-compatible providers.**
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/yourusername/hairy-botter)](https://goreportcard.com/report/github.com/yourusername/hairy-botter)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -22,13 +22,14 @@ Whether you are building a CLI, a Telegram bot, or a web interface, you just nee
 
 ## ✨ Features
 
-* 🧠 **Genkit Powered:** Uses [Firebase Genkit](https://firebase.google.com/docs/genkit) as the AI framework, backed by Google Gemini models. Swapping providers (Vertex AI, Ollama, etc.) requires only a plugin change.
-* 🔌 **MCP Support:** Implements the **Model Context Protocol** to call external servers/functions via Genkit's MCP plugin (includes example implementation).
+* 🧠 **Genkit Powered:** Uses [Firebase Genkit](https://firebase.google.com/docs/genkit) as the AI framework. Provider is selectable via `config.yaml` — Gemini (default) and OpenAI (or any OpenAI-compatible endpoint) are supported out of the box.
+* 🔌 **MCP Support:** Implements the **Model Context Protocol** to call external servers/functions via Genkit's MCP plugin (includes example Skills MCP server).
 * 💾 **Smart History:** Session-based history storage (`history-gemini` folder) with optional auto-summarization to save context window.
-* 📚 **RAG Capable:** Built-in Retrieval-Augmented Generation. Drop text documents into the `bot-context` folder to chat with your data.
+* 📚 **RAG Capable:** Built-in Retrieval-Augmented Generation. Drop text documents into the `bot-context` folder to give the agent long-term, searchable knowledge. The embedder provider can be configured independently from the main AI provider.
 * 🎭 **Custom Personality:** Role and system prompt defined directly in `config.yaml`.
 * 🤖 **Multi-agent / Sub-agent:** Agents can expose themselves as MCP servers (HTTP or stdio) so an orchestrator can delegate tasks to specialised sub-agents, each with its own config, model, and tool set.
 * 🖼️ **Multi-modal:** Native support for Image and PDF inputs.
+* ⚡ **Command Output Caching:** Includes `cachefor`, a small CLI wrapper that caches command output for a configurable TTL — useful for injecting slow-changing dynamic data into the system prompt without re-running the command every request.
 * 🚀 **Ready-to-use Clients:** Includes CLI, Telegram, Facebook Messenger, WhatsApp, and Gmail clients.
 
 ---
@@ -39,7 +40,7 @@ Whether you are building a CLI, a Telegram bot, or a web interface, you just nee
 
 The easiest way to get up and running is via Docker Compose.
 
-1.  Copy `config.yaml.example` to `config.yaml` and set your `api_keys.gemini` value.
+1.  Copy `config.yaml.example` to `config.yaml` and set your API key (e.g. `providers.gemini.api_key` or the `GEMINI_API_KEY` env var).
 2.  Run the stack:
 
 ```bash
@@ -50,12 +51,17 @@ docker-compose up
 
 **Prerequisites:** Go installed on your machine.
 
-1.  Copy `config.yaml.example` to `config.yaml` and set your Gemini API key:
+1.  Copy `config.yaml.example` to `config.yaml` and configure your provider and API key:
     ```yaml
-    api_keys:
-      gemini: "your_api_key_here"
+    provider: "gemini"   # or "openai"
+    providers:
+      gemini:
+        api_key: "your_gemini_api_key_here"
+      # openai:
+      #   api_key: "your_openai_api_key_here"
+      #   base_url: ""   # optional; override for any OpenAI-compatible endpoint
     ```
-    Alternatively, set the `GEMINI_API_KEY` environment variable — it is used as a fallback when the key is absent from the file.
+    Alternatively, set the `GEMINI_API_KEY` or `OPENAI_API_KEY` environment variable — both are used as fallbacks when the key is absent from the file.
 2.  Run the server (it auto-loads `config.yaml` from the working directory):
     ```bash
     go run cmd/server-bot/main.go
@@ -69,9 +75,12 @@ All configuration lives in `config.yaml`. Copy `config.yaml.example` to `config.
 
 ```yaml
 run_mode: "agent"          # "agent" (HTTP server) or "mcp_cli" (stdio sub-agent)
-model: "gemini-flash-latest"
-gemini_search_disabled: false
-gemini_thinking_level: "NONE"  # omit to use model default
+
+# AI provider: "gemini" (default) or "openai" (any OpenAI-compatible endpoint)
+provider: "gemini"
+model: "gemini-flash-latest"   # gemini: e.g. "gemini-2.5-flash"; openai: e.g. "gpt-4o"
+gemini_search_disabled: false  # Gemini-specific; ignored for other providers
+gemini_thinking_level: "NONE"  # Gemini-specific; omit to use model default
 log_level: "info"
 
 personality:
@@ -88,6 +97,8 @@ capabilities:
   rag:
     enabled: true
     directory: "./bot-context"
+    # embedder_provider: "gemini"   # defaults to top-level provider; can be different
+    embedding_model: "gemini-embedding-001"
   history_summary:
     enabled: true
     message_count: 20
@@ -109,12 +120,22 @@ context:
     - name: "Weather"       # command + args → direct execution (handles spaces in args correctly)
       command: "weather-bin"
       args: ["--city", "New York"]
+    - name: "Build info"    # wrap slow commands with cachefor to avoid re-running on every request
+      command: "cachefor"
+      args: ["-cacheTime", "10m", "--", "my-slow-command", "--flag"]
 
-api_keys:
-  gemini: ""                # or set GEMINI_API_KEY env var as fallback
+# Provider credentials — env vars GEMINI_API_KEY / OPENAI_API_KEY are also supported
+providers:
+  gemini:
+    api_key: ""
+  openai:
+    api_key: ""
+    base_url: ""  # optional; set to use any OpenAI-compatible endpoint
 ```
 
 See `config.yaml.example` for the full reference with all options and comments.
+
+> **Note on Providers:** Set `provider: "gemini"` (default) or `provider: "openai"`. For OpenAI-compatible endpoints (Azure, local Ollama with an OpenAI shim, etc.) set `providers.openai.base_url`. The embedder can use a different provider than the main model via `capabilities.rag.embedder_provider`.
 
 > **Note on MCP:** Tools from each MCP server are automatically namespaced by their index (e.g. `mcp-0_chat`, `mcp-1_chat`), so identical tool names across different servers don't collide. The uniqueness constraint only applies to tools defined manually via `genkit.DefineTool`.
 
@@ -264,7 +285,7 @@ History files are stored in the `history-gemini/` folder as JSON. After the migr
 
 ## 🛠️ Skills MCP Server
 
-The repo includes a dedicated MCP (Model Context Protocol) server designed to give the AI agent autonomous access to a sandboxed environment. This allows the AI to run commands, edit code, and modify files—similar to how tools like OpenDevin or OpenClaw work.
+The repo includes a dedicated MCP (Model Context Protocol) server designed to give the AI agent autonomous access to a sandboxed environment. This allows the AI to run commands, edit code, and modify files similar to how tools like OpenDevin or OpenClaw work.
 
 **Features & Tools:**
 - `execute_command`: Execute arbitrary shell commands in the container.
@@ -291,8 +312,23 @@ docker-compose -f docker-compose-skill.yml up
 ```
 
 **Docker Environment:**
-The Skills MCP Server runs in an Alpine Linux Docker container. This means the AI has access to a real shell and can use package managers like `apk` to install additional applications dynamically if it needs them to accomplish a task.
-*(Note: Since it is a container, installed applications and environment changes are not persistent between restarts unless explicitly mounted).*
+The Skills MCP Server runs in an Alpine Linux Docker container. The container runs as a non-root user (`agentuser`) for security, so operations that require root — such as installing packages with `apk` — are not available at runtime.
+
+---
+
+## ⚡ cachefor
+
+`cachefor` is a small CLI wrapper that caches the stdout, stderr, and exit code of any command for a configurable TTL. It is bundled into the Skills MCP Docker image and is particularly useful in `dynamic_data` entries where the same slow command (e.g. a network lookup or a build step) would otherwise re-run on every request.
+
+```bash
+# Cache the output of a command for 10 minutes
+cachefor -cacheTime 10m my-slow-command --arg value
+
+# Or via env var
+CACHE_TIME=10m cachefor my-slow-command --arg value
+```
+
+Stale cache files are automatically cleaned up on each invocation.
 
 ---
 
@@ -300,4 +336,4 @@ The Skills MCP Server runs in an Alpine Linux Docker container. This means the A
 
 > **Security Warning:** Please do not run this server on the public internet without additional authentication. It is intended as an internal helper tool. Public exposure could lead to excessive API usage and costs. Furthermore, running the **Skills MCP Server** gives the AI the ability to execute arbitrary shell commands inside its container. Do not expose this environment or grant it access to sensitive host directories.
 
-> **💡 Pro Tip:** When using the **Skills MCP Server**, you can drop text files explaining specific "skills" or commands into the RAG `bot-context/` folder. These files become part of the prompt, teaching the AI exactly how to use specific CLI tools or project structures!
+> **💡 Pro Tip:** When using the **Skills MCP Server**, use `static_inject` to teach the AI how to use specific CLI tools or project structures by injecting plain-text "skill" files directly into the system prompt. RAG (`bot-context/`) is a good alternative when you have a larger knowledge base and want semantic search rather than injecting everything verbatim on every request.

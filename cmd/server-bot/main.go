@@ -14,13 +14,14 @@ import (
 
 	"hairy-botter/internal/ai/adapters"
 	"hairy-botter/internal/ai/agent"
-	"hairy-botter/internal/ai/gemini"
+	"hairy-botter/internal/ai/providers"
 	"hairy-botter/internal/config"
 	"hairy-botter/internal/history"
 	"hairy-botter/internal/mcpserver"
 	"hairy-botter/internal/rag"
 	"hairy-botter/internal/server"
 
+	"github.com/firebase/genkit/go/core/api"
 	"github.com/firebase/genkit/go/genkit"
 )
 
@@ -75,10 +76,36 @@ func main() {
 		return
 	}
 
-	if cfg.APIKeys.Gemini == "" {
-		logger.Error("GEMINI_API_KEY is not set in config or env")
+	// Build the main AI provider.
+	mainProvider, err := providers.New(cfg.Provider, providerCfgFor(cfg.Provider, cfg))
+	if err != nil {
+		logger.Error("failed to create AI provider", slog.String("provider", cfg.Provider), slog.String("err", err.Error()))
 		return
 	}
+
+	// Build the embedder provider (may differ from the main provider).
+	embedderProviderName := cfg.Capabilities.Rag.EmbedderProvider
+	embedderCfg := providerCfgFor(embedderProviderName, cfg)
+	if cfg.Capabilities.Rag.EmbedderBaseURL != "" {
+		embedderCfg.BaseURL = cfg.Capabilities.Rag.EmbedderBaseURL
+	}
+	embedderProvider, err := providers.New(embedderProviderName, embedderCfg)
+	if err != nil {
+		logger.Error("failed to create embedder provider", slog.String("provider", embedderProviderName), slog.String("err", err.Error()))
+		return
+	}
+
+	// Collect distinct plugins for genkit.Init.
+	g := genkit.Init(context.Background(), genkit.WithPlugins(distinctPlugins(mainProvider.Plugin(), embedderProvider.Plugin())...))
+
+	model, err := mainProvider.Model(g, cfg.Model)
+	if err != nil {
+		logger.Error("failed to define model", slog.String("err", err.Error()))
+		return
+	}
+
+	searchEnable := !cfg.GeminiSearchDisabled
+	customModelConfig := mainProvider.GenerateOptions(cfg.Model, searchEnable, cfg.GeminiThinkingLevel)
 
 	historySummary := 0
 	if cfg.Capabilities.HistorySummary.Enabled {
@@ -101,30 +128,14 @@ func main() {
 	}
 	logger.Info("MCP servers from config", slog.Int("count", len(mcpServers)))
 
-	searchEnable := !cfg.GeminiSearchDisabled
-
-	// Initialize the Gemini AI logic
-	ga := gemini.ConfigPlugin(cfg.APIKeys.Gemini)
-	g := genkit.Init(context.Background(), genkit.WithPlugins(ga))
-
-	model, err := gemini.ConfigModel(g, ga, cfg.Model)
-	if err != nil {
-		logger.Error("failed to define model", slog.String("err", err.Error()))
-		return
-	}
-	customModelConfig := gemini.GenerateOptions(cfg.Model, searchEnable, cfg.GeminiThinkingLevel)
-
 	var ragL *rag.Logic
 	if cfg.Capabilities.Rag.Enabled && cfg.Capabilities.Rag.Directory != "" {
-		// First load/created embedder config
-		embedder, err := gemini.ConfigEmbedder(g, ga, cfg.Capabilities.Rag.EmbeddingModel)
+		embedder, err := embedderProvider.Embedder(g, cfg.Capabilities.Rag.EmbeddingModel)
 		if err != nil {
 			logger.Error("failed to define embedder", slog.String("err", err.Error()))
-
 			return
 		}
 
-		// Init the RAG
 		ragL, err = rag.New(logger, cfg.Capabilities.Rag.Directory, adapters.NewEmbedder(g, embedder))
 		if err != nil {
 			logger.Error("failed to create RAG logic", slog.String("err", err.Error()))
@@ -141,7 +152,6 @@ func main() {
 	aiLogic, err := agent.New(logger, g, model, hist, mcpServers, ragL, systemPrompt, customModelConfig, cfg.Context)
 	if err != nil {
 		logger.Error("failed to create AI logic", slog.String("err", err.Error()))
-
 		return
 	}
 
@@ -228,7 +238,7 @@ func main() {
 
 	stopCh := make(chan os.Signal, 1)
 	signal.Notify(stopCh, os.Interrupt, syscall.SIGTERM)
-	finishedCh := make(chan struct{}) // Signal the end of the graceful shutdown
+	finishedCh := make(chan struct{})
 	go func() {
 		<-stopCh
 		logger.Info("shutting down server")
@@ -262,8 +272,36 @@ func main() {
 			logger.Error("server failed", slog.String("err", err.Error()))
 		}
 	} else {
-		// Wait if no chat proxy to keep agent alive
 		logger.Info("agent running without chat proxy")
 	}
 	<-finishedCh
+}
+
+// providerCfgFor returns the providers.Config for the named provider from cfg.
+func providerCfgFor(name string, cfg *config.Config) providers.Config {
+	switch name {
+	case "openai":
+		return providers.Config{
+			APIKey:  cfg.Providers.OpenAI.APIKey,
+			BaseURL: cfg.Providers.OpenAI.BaseURL,
+		}
+	default: // gemini
+		return providers.Config{
+			APIKey:  cfg.Providers.Gemini.APIKey,
+			BaseURL: cfg.Providers.Gemini.BaseURL,
+		}
+	}
+}
+
+// distinctPlugins returns a deduplicated slice of api.Plugin by name.
+func distinctPlugins(ps ...api.Plugin) []api.Plugin {
+	seen := make(map[string]bool, len(ps))
+	out := make([]api.Plugin, 0, len(ps))
+	for _, p := range ps {
+		if !seen[p.Name()] {
+			seen[p.Name()] = true
+			out = append(out, p)
+		}
+	}
+	return out
 }

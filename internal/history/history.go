@@ -77,6 +77,8 @@ func (l *Logic) Save(ctx context.Context, sessionID string, history []*ai.Messag
 		return errors.New("invalid sessionID")
 	}
 
+	history = stripMedia(history)
+
 	var b []byte
 	var err error
 	if l.config.HistorySummary > 0 && len(history) >= l.config.HistorySummary {
@@ -119,6 +121,24 @@ func (l *Logic) summarize(ctx context.Context, history []*ai.Message) (*ai.Messa
 	}
 
 	return ai.NewModelTextMessage(fmt.Sprintf("Summarized history:\n\n%s", summary)), nil
+}
+
+// stripMedia replaces PartMedia parts with a text placeholder so binary file
+// data is not re-sent on every subsequent turn.
+func stripMedia(msgs []*ai.Message) []*ai.Message {
+	out := make([]*ai.Message, len(msgs))
+	for i, msg := range msgs {
+		stripped := make([]*ai.Part, 0, len(msg.Content))
+		for _, p := range msg.Content {
+			if p.Kind == ai.PartMedia {
+				stripped = append(stripped, ai.NewTextPart("[attached: "+p.ContentType+"]"))
+			} else {
+				stripped = append(stripped, p)
+			}
+		}
+		out[i] = &ai.Message{Role: msg.Role, Content: stripped, Metadata: msg.Metadata}
+	}
+	return out
 }
 
 func contentToString(history []*ai.Message) string {

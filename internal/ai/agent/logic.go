@@ -3,6 +3,7 @@ package agent
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -207,7 +208,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 	userPromptParts := make([]*ai.Part, 0, len(req.InlineData)+1)
 	for _, inlineData := range req.InlineData {
 		// If we have some inline data convert them to prompt parts
-		userPromptParts = append(userPromptParts, ai.NewMediaPart(inlineData.MimeType, string(inlineData.Data)))
+		userPromptParts = append(userPromptParts, ai.NewMediaPart(inlineData.MimeType, "data:"+inlineData.MimeType+";base64,"+base64.StdEncoding.EncodeToString(inlineData.Data)))
 	}
 
 	// Add the user's request at the end too

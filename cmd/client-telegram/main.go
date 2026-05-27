@@ -217,6 +217,36 @@ func (l *Logic) Handler(ctx context.Context, b *bot.Bot, update *models.Update) 
 		}
 	}
 
+	if update.Message.Document != nil {
+		doc := update.Message.Document
+		f, err := b.GetFile(ctx, &bot.GetFileParams{
+			FileID: doc.FileID,
+		})
+		if err != nil {
+			fmt.Println("error getting document file:", err)
+			return
+		}
+
+		dlURL := b.FileDownloadLink(f)
+		resp, err := http.Get(dlURL)
+		if err != nil {
+			fmt.Println("error downloading document:", err)
+			return
+		}
+		defer func() { _ = resp.Body.Close() }()
+
+		data, err := io.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Println("error reading document:", err)
+			return
+		}
+		payloads = append(payloads, data)
+
+		if update.Message.Caption != "" {
+			msg = update.Message.Caption
+		}
+	}
+
 	// Start typing indicator in a background goroutine
 	doneCh := make(chan struct{})
 	go func() {

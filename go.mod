@@ -9,6 +9,7 @@ require (
 	github.com/go-telegram/bot v1.17.0
 	github.com/google/uuid v1.6.0
 	github.com/mark3labs/mcp-go v0.29.1-0.20250521213157-f99e5472f312
+	github.com/openai/openai-go v1.8.2
 	github.com/philippgille/chromem-go v0.7.0
 	golang.org/x/oauth2 v0.30.0
 	google.golang.org/api v0.236.0
@@ -41,7 +42,6 @@ require (
 	github.com/mattn/go-colorable v0.1.2 // indirect
 	github.com/mattn/go-isatty v0.0.8 // indirect
 	github.com/mbleigh/raymond v0.0.0-20250414171441-6b3a58ab9e0a // indirect
-	github.com/openai/openai-go v1.8.2 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect

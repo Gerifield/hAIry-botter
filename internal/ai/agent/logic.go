@@ -211,8 +211,10 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 		userPromptParts = append(userPromptParts, ai.NewMediaPart(inlineData.MimeType, "data:"+inlineData.MimeType+";base64,"+base64.StdEncoding.EncodeToString(inlineData.Data)))
 	}
 
-	// Add the user's request at the end too
-	userPromptParts = append(userPromptParts, ai.NewTextPart(req.Message))
+	// Add the user's request at the end too (skip if empty, e.g. file sent without caption)
+	if req.Message != "" {
+		userPromptParts = append(userPromptParts, ai.NewTextPart(req.Message))
+	}
 	hist = append(hist, ai.NewUserMessage(userPromptParts...))
 
 	// Inject static and dynamic information into the system prompt

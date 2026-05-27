@@ -188,60 +188,24 @@ func (l *Logic) Handler(ctx context.Context, b *bot.Bot, update *models.Update) 
 		fmt.Println("photo file ID:", highResImg.FileID)
 		fmt.Printf("photo info: W: %d, H: %d, Size: %d\n", highResImg.Width, highResImg.Height, highResImg.FileSize)
 		fmt.Println("caption:", update.Message.Caption)
-		f, err := b.GetFile(ctx, &bot.GetFileParams{
-			FileID: highResImg.FileID,
-		})
+		data, err := downloadFile(ctx, b, highResImg.FileID)
 		if err != nil {
-			fmt.Println("error getting file:", err)
-			return
-		}
-
-		// Download the file
-		dlURL := b.FileDownloadLink(f)
-		resp, err := http.Get(dlURL)
-		if err != nil {
-			fmt.Println("error downloading file:", err)
-			return
-		}
-		defer func() { _ = resp.Body.Close() }()
-
-		data, err := io.ReadAll(resp.Body)
-		if err != nil {
-			fmt.Println("error reading file:", err)
+			fmt.Println("error downloading photo:", err)
 			return
 		}
 		payloads = append(payloads, data)
-
 		if update.Message.Caption != "" {
 			msg = update.Message.Caption
 		}
 	}
 
 	if update.Message.Document != nil {
-		doc := update.Message.Document
-		f, err := b.GetFile(ctx, &bot.GetFileParams{
-			FileID: doc.FileID,
-		})
-		if err != nil {
-			fmt.Println("error getting document file:", err)
-			return
-		}
-
-		dlURL := b.FileDownloadLink(f)
-		resp, err := http.Get(dlURL)
+		data, err := downloadFile(ctx, b, update.Message.Document.FileID)
 		if err != nil {
 			fmt.Println("error downloading document:", err)
 			return
 		}
-		defer func() { _ = resp.Body.Close() }()
-
-		data, err := io.ReadAll(resp.Body)
-		if err != nil {
-			fmt.Println("error reading document:", err)
-			return
-		}
 		payloads = append(payloads, data)
-
 		if update.Message.Caption != "" {
 			msg = update.Message.Caption
 		}
@@ -310,6 +274,21 @@ func (l *Logic) Handler(ctx context.Context, b *bot.Bot, update *models.Update) 
 		return
 	}
 
+}
+
+func downloadFile(ctx context.Context, b *bot.Bot, fileID string) ([]byte, error) {
+	f, err := b.GetFile(ctx, &bot.GetFileParams{FileID: fileID})
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.Get(b.FileDownloadLink(f))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	return io.ReadAll(resp.Body)
 }
 
 func biggestImage(photos []models.PhotoSize) models.PhotoSize {

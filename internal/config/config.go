@@ -47,6 +47,7 @@ type CapabilitiesConfig struct {
 	Rag            RagConfig            `yaml:"rag"`
 	HistorySummary HistorySummaryConfig `yaml:"history_summary"`
 	MCPServers     []MCPServerConfig    `yaml:"mcp_servers"`
+	MaxTurns       int                  `yaml:"max_turns"` // Maximum tool-call iterations per request; 0 = genkit default (5)
 }
 
 // RagConfig specifies Retrieval-Augmented Generation settings.

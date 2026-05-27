@@ -21,6 +21,7 @@ import (
 	"hairy-botter/internal/rag"
 	"hairy-botter/internal/server"
 
+	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/core/api"
 	"github.com/firebase/genkit/go/genkit"
 )
@@ -147,6 +148,10 @@ func main() {
 		HistorySummary: historySummary,
 		Summarizer:     adapters.NewSummarizer(g, model),
 	})
+
+	if cfg.Capabilities.MaxTurns > 0 {
+		customModelConfig = append(customModelConfig, ai.WithMaxTurns(cfg.Capabilities.MaxTurns))
+	}
 
 	systemPrompt := cfg.Personality.Role + "\n" + cfg.Personality.SystemPrompt
 	aiLogic, err := agent.New(logger, g, model, hist, mcpServers, ragL, systemPrompt, customModelConfig, cfg.Context)

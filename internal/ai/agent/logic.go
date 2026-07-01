@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"hairy-botter/internal/ai/domain"
@@ -272,14 +273,35 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 
 func injectSystemPrompt(logger *slog.Logger, systemPrompt string, contextConfig config.ContextConfig) string {
 	var contextInjector strings.Builder
-	// Inject static data first
-	for _, file := range contextConfig.StaticInject {
-		content, err := os.ReadFile(file)
-		if err != nil {
-			logger.Warn("failed to load auto-inject file", slog.String("file", file), slog.String("error", err.Error()))
-			continue
+
+	n := len(contextConfig.StaticInject)
+	if n > 0 {
+		type result struct {
+			content []byte
+			err     error
 		}
-		contextInjector.WriteString(fmt.Sprintf("\n\n[File: %s]\n%s", file, string(content)))
+		results := make([]result, n)
+		var wg sync.WaitGroup
+
+		// Inject static data first
+		for i, file := range contextConfig.StaticInject {
+			wg.Add(1)
+			go func(i int, file string) {
+				defer wg.Done()
+				content, err := os.ReadFile(file)
+				results[i] = result{content, err}
+			}(i, file)
+		}
+		wg.Wait()
+
+		for i, file := range contextConfig.StaticInject {
+			res := results[i]
+			if res.err != nil {
+				logger.Warn("failed to load auto-inject file", slog.String("file", file), slog.String("error", res.err.Error()))
+				continue
+			}
+			contextInjector.WriteString(fmt.Sprintf("\n\n[File: %s]\n%s", file, string(res.content)))
+		}
 	}
 
 	// Inject dynamic data

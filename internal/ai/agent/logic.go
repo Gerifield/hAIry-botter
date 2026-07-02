@@ -305,24 +305,44 @@ func injectSystemPrompt(logger *slog.Logger, systemPrompt string, contextConfig 
 	}
 
 	// Inject dynamic data
-	for _, dd := range contextConfig.DynamicData {
-		var cmd *exec.Cmd
-		if len(dd.Args) > 0 {
-			// Option A: Direct Execution (Safer, handles spaces in args perfectly)
-			// Best for: date, weather-bin --city "New York"
-			cmd = exec.Command(dd.Command, dd.Args...)
-		} else {
-			// Option B: Shell Magic (Allows pipes and redirects)
-			// Best for: "ls | grep .go"
-			cmd = exec.Command("sh", "-c", dd.Command)
+	m := len(contextConfig.DynamicData)
+	if m > 0 {
+		type result struct {
+			content []byte
+			err     error
 		}
+		results := make([]result, m)
+		var wg sync.WaitGroup
 
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			logger.Warn("failed to inject auto-inject", slog.String("name", dd.Name), slog.String("error", err.Error()))
-			continue
+		for i, dd := range contextConfig.DynamicData {
+			wg.Add(1)
+			go func(i int, dd config.DynamicDataConfig) {
+				defer wg.Done()
+				var cmd *exec.Cmd
+				if len(dd.Args) > 0 {
+					// Option A: Direct Execution (Safer, handles spaces in args perfectly)
+					// Best for: date, weather-bin --city "New York"
+					cmd = exec.Command(dd.Command, dd.Args...)
+				} else {
+					// Option B: Shell Magic (Allows pipes and redirects)
+					// Best for: "ls | grep .go"
+					cmd = exec.Command("sh", "-c", dd.Command)
+				}
+
+				out, err := cmd.CombinedOutput()
+				results[i] = result{out, err}
+			}(i, dd)
 		}
-		contextInjector.WriteString(fmt.Sprintf("\n\n[%s] %s", dd.Name, strings.TrimSpace(string(out))))
+		wg.Wait()
+
+		for i, dd := range contextConfig.DynamicData {
+			res := results[i]
+			if res.err != nil {
+				logger.Warn("failed to inject auto-inject", slog.String("name", dd.Name), slog.String("error", res.err.Error()))
+				continue
+			}
+			contextInjector.WriteString(fmt.Sprintf("\n\n[%s] %s", dd.Name, strings.TrimSpace(string(res.content))))
+		}
 	}
 	contextInjector.WriteString("\n")
 

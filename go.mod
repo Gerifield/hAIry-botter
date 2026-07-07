@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/briandowns/spinner v1.23.2
-	github.com/firebase/genkit/go v1.7.0
+	github.com/firebase/genkit/go v1.10.0
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/go-telegram/bot v1.17.0
 	github.com/google/uuid v1.6.0
@@ -13,7 +13,7 @@ require (
 	github.com/philippgille/chromem-go v0.7.0
 	golang.org/x/oauth2 v0.30.0
 	google.golang.org/api v0.236.0
-	google.golang.org/genai v1.55.0
+	google.golang.org/genai v1.62.0
 	google.golang.org/protobuf v1.36.6
 	gopkg.in/yaml.v3 v3.0.1
 )

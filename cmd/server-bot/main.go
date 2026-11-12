@@ -144,7 +144,7 @@ func main() {
 		}
 	}
 
-	hist := history.New(logger, "history-gemini/", history.Config{
+	hist := history.New(logger, cfg.History.Directory, history.Config{
 		HistorySummary: historySummary,
 		Summarizer:     adapters.NewSummarizer(g, model),
 	})
@@ -154,7 +154,7 @@ func main() {
 	}
 
 	systemPrompt := cfg.Personality.Role + "\n" + cfg.Personality.SystemPrompt
-	aiLogic, err := agent.New(logger, g, model, hist, mcpServers, ragL, systemPrompt, customModelConfig, cfg.Context)
+	aiLogic, err := agent.New(logger, g, model, hist, mcpServers, ragL, systemPrompt, customModelConfig, cfg.Context, cfg.Timeouts)
 	if err != nil {
 		logger.Error("failed to create AI logic", slog.String("err", err.Error()))
 		return

@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -11,16 +12,30 @@ import (
 type Config struct {
 	RunMode              string             `yaml:"run_mode"`
 	AgentConfig          AgentConfig        `yaml:"agent_config"`
-	Provider             string             `yaml:"provider"`   // gemini (default) | openai
+	Provider             string             `yaml:"provider"` // gemini (default) | openai
 	Model                string             `yaml:"model"`
 	GeminiSearchDisabled bool               `yaml:"gemini_search_disabled"`
 	GeminiThinkingLevel  string             `yaml:"gemini_thinking_level"`
 	LogLevel             string             `yaml:"log_level"`
 	Personality          PersonalityConfig  `yaml:"personality"`
 	Capabilities         CapabilitiesConfig `yaml:"capabilities"`
+	History              HistoryConfig      `yaml:"history"`
+	Timeouts             TimeoutsConfig     `yaml:"timeouts"`
 	Context              ContextConfig      `yaml:"context"`
 	APIKeys              APIKeysConfig      `yaml:"api_keys"` // legacy; merged into Providers on load
 	Providers            ProvidersConfig    `yaml:"providers"`
+}
+
+// HistoryConfig holds conversation history storage settings.
+type HistoryConfig struct {
+	Directory string `yaml:"directory"`
+}
+
+// TimeoutsConfig holds configurable timeout durations.
+type TimeoutsConfig struct {
+	Generate       time.Duration `yaml:"generate"`
+	MCP            time.Duration `yaml:"mcp"`
+	DynamicCommand time.Duration `yaml:"dynamic_command"`
 }
 
 // AgentConfig holds settings specific to the 'agent' run mode.
@@ -61,8 +76,9 @@ type RagConfig struct {
 
 // HistorySummaryConfig controls conversation history summarization.
 type HistorySummaryConfig struct {
-	Enabled      bool `yaml:"enabled"`
-	MessageCount int  `yaml:"message_count"`
+	Enabled      bool   `yaml:"enabled"`
+	MessageCount int    `yaml:"message_count"`
+	Directory    string `yaml:"directory"`
 }
 
 // MCPServerConfig defines an external Tool Provider.
@@ -81,9 +97,10 @@ type ContextConfig struct {
 
 // DynamicDataConfig .
 type DynamicDataConfig struct {
-	Name    string   `yaml:"name"`
-	Command string   `yaml:"command"`
-	Args    []string `yaml:"args"`
+	Name    string        `yaml:"name"`
+	Command string        `yaml:"command"`
+	Args    []string      `yaml:"args"`
+	Timeout time.Duration `yaml:"timeout"`
 }
 
 // ProvidersConfig holds per-provider credentials and endpoints.
@@ -156,6 +173,24 @@ func Load(path string) (*Config, error) {
 		} else {
 			cfg.Capabilities.Rag.EmbeddingModel = "gemini-embedding-001"
 		}
+	}
+
+	if cfg.History.Directory == "" {
+		if cfg.Capabilities.HistorySummary.Directory != "" {
+			cfg.History.Directory = cfg.Capabilities.HistorySummary.Directory
+		} else {
+			cfg.History.Directory = "history-gemini/"
+		}
+	}
+
+	if cfg.Timeouts.Generate <= 0 {
+		cfg.Timeouts.Generate = 120 * time.Second
+	}
+	if cfg.Timeouts.MCP <= 0 {
+		cfg.Timeouts.MCP = 15 * time.Second
+	}
+	if cfg.Timeouts.DynamicCommand <= 0 {
+		cfg.Timeouts.DynamicCommand = 10 * time.Second
 	}
 
 	return &cfg, nil

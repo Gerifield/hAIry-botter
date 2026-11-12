@@ -20,6 +20,36 @@ func TestEnsureSafePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get absolute base dir: %v", err)
 	}
+	if evalBase, err := filepath.EvalSymlinks(absBase); err == nil {
+		absBase = evalBase
+	}
+
+	// Create an outside directory and file to test symlink escapes
+	outsideDir, err := os.MkdirTemp("", "mcp-skills-outside-*")
+	if err != nil {
+		t.Fatalf("failed to create outside temp dir: %v", err)
+	}
+	defer os.RemoveAll(outsideDir)
+
+	outsideFile := filepath.Join(outsideDir, "secret.txt")
+	if err := os.WriteFile(outsideFile, []byte("secret"), 0644); err != nil {
+		t.Fatalf("failed to write outside file: %v", err)
+	}
+
+	// Create symlinks inside absBase pointing outside
+	symlinkFile := filepath.Join(absBase, "escape_file.txt")
+	_ = os.Symlink(outsideFile, symlinkFile)
+
+	symlinkDir := filepath.Join(absBase, "escape_dir")
+	_ = os.Symlink(outsideDir, symlinkDir)
+
+	// Create a valid internal file and symlink inside absBase
+	insideFile := filepath.Join(absBase, "real.txt")
+	if err := os.WriteFile(insideFile, []byte("hello"), 0644); err != nil {
+		t.Fatalf("failed to write inside file: %v", err)
+	}
+	validSymlink := filepath.Join(absBase, "valid_link.txt")
+	_ = os.Symlink(insideFile, validSymlink)
 
 	tests := []struct {
 		name      string
@@ -62,6 +92,23 @@ func TestEnsureSafePath(t *testing.T) {
 		{
 			name:      "path traversal - sneaky dot dot",
 			reqPath:   "subdir/../../outside.txt",
+			expectErr: true,
+			contains:  "path traversal attempt detected",
+		},
+		{
+			name:      "valid internal symlink",
+			reqPath:   "valid_link.txt",
+			expectErr: false,
+		},
+		{
+			name:      "symlink traversal - file pointing outside",
+			reqPath:   "escape_file.txt",
+			expectErr: true,
+			contains:  "path traversal attempt detected",
+		},
+		{
+			name:      "symlink traversal - dir pointing outside with new file",
+			reqPath:   "escape_dir/new_outside.txt",
 			expectErr: true,
 			contains:  "path traversal attempt detected",
 		},

@@ -73,7 +73,9 @@ func (l *Logic) Read(ctx context.Context, sessionID string) ([]*ai.Message, erro
 
 // Save .
 func (l *Logic) Save(ctx context.Context, sessionID string, history []*ai.Message) error {
-	if strings.Contains(sessionID, "/") || strings.Contains(sessionID, "\\") || strings.Contains(sessionID, "..") {
+	trimmedID := strings.TrimSpace(sessionID)
+	if trimmedID == "" || trimmedID == "." ||
+		strings.Contains(trimmedID, "/") || strings.Contains(trimmedID, "\\") || strings.Contains(trimmedID, "..") {
 		return errors.New("invalid sessionID")
 	}
 
@@ -82,7 +84,7 @@ func (l *Logic) Save(ctx context.Context, sessionID string, history []*ai.Messag
 	var b []byte
 	var err error
 	if l.config.HistorySummary > 0 && len(history) >= l.config.HistorySummary {
-		l.logger.Info("summarizing history", slog.String("sessionID", sessionID), slog.Int("historyLength", len(history)))
+		l.logger.Info("summarizing history", slog.String("sessionID", trimmedID), slog.Int("historyLength", len(history)))
 
 		summary, err := l.summarize(ctx, history)
 		if err != nil {
@@ -94,14 +96,18 @@ func (l *Logic) Save(ctx context.Context, sessionID string, history []*ai.Messag
 			return err
 		}
 	} else {
-		l.logger.Info("saving history", slog.String("sessionID", sessionID), slog.Int("historyLength", len(history)))
+		l.logger.Info("saving history", slog.String("sessionID", trimmedID), slog.Int("historyLength", len(history)))
 		b, err = json.Marshal(saveFormat{History: history})
 		if err != nil {
 			return err
 		}
 	}
 
-	return os.WriteFile(filepath.Join(l.historyPath, filepath.Base(sessionID)), b, 0644)
+	if err := os.MkdirAll(l.historyPath, 0755); err != nil {
+		return fmt.Errorf("failed to create history directory: %w", err)
+	}
+
+	return os.WriteFile(filepath.Join(l.historyPath, filepath.Base(trimmedID)), b, 0644)
 }
 
 func (l *Logic) summarize(ctx context.Context, history []*ai.Message) (*ai.Message, error) {

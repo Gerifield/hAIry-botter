@@ -58,6 +58,16 @@ capabilities:
       env:
         MY_VAR: "value"
 
+# History storage settings
+history:
+  directory: "./history-gemini"
+
+# Configurable timeouts (Go duration strings, e.g. "15s", "2m")
+timeouts:
+  generate: "120s"          # LLM generation timeout per request
+  mcp: "15s"                # MCP connection and tool discovery timeout
+  dynamic_command: "10s"    # Default timeout for context.dynamic_data commands
+
 
 # ---------------------------------------------------------
 # 4. Context Management

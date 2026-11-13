@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -14,7 +15,8 @@ import (
 )
 
 // ensureSafePath checks if the given path is within the base directory.
-// It returns the absolute safe path or an error if the path traverses outside the base directory.
+// It resolves symlinks on both the base directory and target path to prevent symlink escapes,
+// and returns the absolute safe path or an error if the path traverses outside the base directory.
 func ensureSafePath(baseDir, reqPath string) (string, error) {
 	if filepath.IsAbs(reqPath) {
 		return "", fmt.Errorf("path traversal attempt detected: absolute path: %s", reqPath)
@@ -23,6 +25,10 @@ func ensureSafePath(baseDir, reqPath string) (string, error) {
 	absBase, err := filepath.Abs(baseDir)
 	if err != nil {
 		return "", fmt.Errorf("failed to get absolute base directory: %w", err)
+	}
+
+	if evalBase, err := filepath.EvalSymlinks(absBase); err == nil {
+		absBase = evalBase
 	}
 
 	targetPath := filepath.Join(absBase, reqPath)
@@ -42,7 +48,45 @@ func ensureSafePath(baseDir, reqPath string) (string, error) {
 		return "", fmt.Errorf("path traversal attempt detected: %s", reqPath)
 	}
 
-	return absTarget, nil
+	// Walk up to the deepest existing ancestor on disk so we can evaluate symlinks
+	// even when the target file or parent directories do not exist yet (e.g. write_file).
+	curr := absTarget
+	var tail []string
+	for {
+		_, lerr := os.Lstat(curr)
+		if lerr == nil {
+			break
+		}
+		if !errors.Is(lerr, os.ErrNotExist) {
+			return "", fmt.Errorf("failed to stat path: %w", lerr)
+		}
+		parent := filepath.Dir(curr)
+		if parent == curr {
+			break
+		}
+		tail = append([]string{filepath.Base(curr)}, tail...)
+		curr = parent
+	}
+
+	resolvedCurr, err := filepath.EvalSymlinks(curr)
+	if err != nil {
+		return "", fmt.Errorf("path traversal attempt detected: symlink resolution failed for %s: %w", reqPath, err)
+	}
+
+	resolvedTarget := resolvedCurr
+	for _, part := range tail {
+		resolvedTarget = filepath.Join(resolvedTarget, part)
+	}
+
+	resolvedRel, err := filepath.Rel(absBase, resolvedTarget)
+	if err != nil {
+		return "", fmt.Errorf("failed to get relative path after symlink resolution: %w", err)
+	}
+	if resolvedRel == ".." || strings.HasPrefix(resolvedRel, "../") || strings.HasPrefix(resolvedRel, "..\\") {
+		return "", fmt.Errorf("path traversal attempt detected via symlink: %s", reqPath)
+	}
+
+	return resolvedTarget, nil
 }
 
 // handleListFiles creates the handler for listing files recursively.

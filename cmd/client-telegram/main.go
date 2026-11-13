@@ -125,8 +125,10 @@ func (l *Logic) httpHandler(w http.ResponseWriter, r *http.Request) {
 	if pathChatID != "" {
 		i, err := strconv.ParseInt(pathChatID, 10, 64)
 		if err != nil {
-			chatID = i
+			http.Error(w, "Invalid chatID", http.StatusBadRequest)
+			return
 		}
+		chatID = i
 	}
 
 	if chatID == 0 {

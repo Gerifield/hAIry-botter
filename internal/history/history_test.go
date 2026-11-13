@@ -54,3 +54,24 @@ func TestPathTraversalFixed(t *testing.T) {
 		t.Error("Save() unexpectedly wrote file to history directory")
 	}
 }
+
+func TestSaveCreatesDirectoryIfMissing(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "history-mkdir-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	missingDir := filepath.Join(tmpDir, "nested", "history-dir")
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	l := New(logger, missingDir, Config{})
+
+	ctx := context.Background()
+	if err := l.Save(ctx, "session-123", nil); err != nil {
+		t.Fatalf("Save() failed when directory did not exist: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(missingDir, "session-123")); err != nil {
+		t.Errorf("expected session file to be created, got error: %v", err)
+	}
+}

@@ -3,7 +3,9 @@ package server
 import (
 	"crypto/rand"
 	"encoding/json"
+	"io"
 	"net/http"
+	"strings"
 
 	"hairy-botter/internal/ai/domain"
 )
@@ -19,29 +21,42 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Methods", s.cfg.AllowedMethods)
 	w.Header().Set("Access-Control-Allow-Headers", s.cfg.AllowedHeaders)
 
-	msg := r.PostFormValue("message")
 	userID := r.Header.Get("X-User-ID") // Optionally pass userID in header
 
+	var msg string
 	var inlineData []*domain.InlineData
-	if err := r.ParseMultipartForm(32 << 20); err == nil {
-		for _, fileHeaders := range r.MultipartForm.File {
-			for _, binHeader := range fileHeaders {
-				binReader, err := binHeader.Open()
-				if err != nil {
-					http.Error(w, "failed to open payload file", http.StatusInternalServerError)
-					return
-				}
-				data := make([]byte, binHeader.Size)
-				if _, err := binReader.Read(data); err != nil {
+
+	contentType := strings.ToLower(r.Header.Get("Content-Type"))
+	if strings.HasPrefix(contentType, "application/json") {
+		var jsonReq struct {
+			Message string `json:"message"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&jsonReq); err != nil {
+			http.Error(w, "invalid json payload", http.StatusBadRequest)
+			return
+		}
+		msg = jsonReq.Message
+	} else {
+		msg = r.PostFormValue("message")
+		if err := r.ParseMultipartForm(32 << 20); err == nil && r.MultipartForm != nil {
+			for _, fileHeaders := range r.MultipartForm.File {
+				for _, binHeader := range fileHeaders {
+					binReader, err := binHeader.Open()
+					if err != nil {
+						http.Error(w, "failed to open payload file", http.StatusInternalServerError)
+						return
+					}
+					data, err := io.ReadAll(binReader)
 					_ = binReader.Close()
-					http.Error(w, "failed to read binary data", http.StatusInternalServerError)
-					return
+					if err != nil {
+						http.Error(w, "failed to read binary data", http.StatusInternalServerError)
+						return
+					}
+					inlineData = append(inlineData, &domain.InlineData{
+						MimeType: binHeader.Header.Get("Content-Type"),
+						Data:     data,
+					})
 				}
-				_ = binReader.Close()
-				inlineData = append(inlineData, &domain.InlineData{
-					MimeType: binHeader.Header.Get("Content-Type"),
-					Data:     data,
-				})
 			}
 		}
 	}

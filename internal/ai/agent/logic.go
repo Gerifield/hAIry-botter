@@ -55,6 +55,7 @@ type Logic struct {
 
 	// Configured context for static and dynamic data loading
 	contextConfig config.ContextConfig
+	timeouts      config.TimeoutsConfig
 }
 
 // ToolNames returns the names of every tool this agent has access to.
@@ -69,7 +70,17 @@ func (l *Logic) SystemPrompt() string {
 }
 
 // New .
-func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyLogic, inputMCPServers []MCPServer, ragL *rag.Logic, systemPrompt string, extraOpts []ai.GenerateOption, contextConfig config.ContextConfig) (*Logic, error) {
+func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyLogic, inputMCPServers []MCPServer, ragL *rag.Logic, systemPrompt string, extraOpts []ai.GenerateOption, contextConfig config.ContextConfig, timeouts config.TimeoutsConfig) (*Logic, error) {
+	if timeouts.Generate <= 0 {
+		timeouts.Generate = 120 * time.Second
+	}
+	if timeouts.MCP <= 0 {
+		timeouts.MCP = 15 * time.Second
+	}
+	if timeouts.DynamicCommand <= 0 {
+		timeouts.DynamicCommand = 10 * time.Second
+	}
+
 	var tools []ai.Tool
 
 	if len(inputMCPServers) > 0 {
@@ -92,7 +103,7 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 				cfg.Config = genkitMCP.MCPClientOptions{
 					StreamableHTTP: &genkitMCP.StreamableHTTPConfig{
 						BaseURL: srv.Path,
-						Timeout: 15 * time.Second,
+						Timeout: timeouts.MCP,
 					},
 				}
 			} else if serverType == "cli" {
@@ -138,7 +149,7 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 		logger.Info("MCP host initialized")
 
 		logger.Info("loading MCP tools")
-		toolsCtx, toolsCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		toolsCtx, toolsCancel := context.WithTimeout(context.Background(), timeouts.MCP)
 		defer toolsCancel()
 		var toolsErr error
 		tools, toolsErr = mcpManager.GetActiveTools(toolsCtx, g)
@@ -168,6 +179,7 @@ func New(logger *slog.Logger, g *genkit.Genkit, model ai.Model, history historyL
 		extraOpts:     extraOpts,
 		ragL:          ragL,
 		contextConfig: contextConfig,
+		timeouts:      timeouts,
 	}, nil
 }
 
@@ -219,7 +231,7 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 	hist = append(hist, ai.NewUserMessage(userPromptParts...))
 
 	// Inject static and dynamic information into the system prompt
-	finalSystemPrompt := injectSystemPrompt(logger, l.systemPrompt, l.contextConfig)
+	finalSystemPrompt := injectSystemPrompt(ctx, logger, l.systemPrompt, l.contextConfig, l.timeouts.DynamicCommand)
 
 	logger.Debug("message parts sending to LLM", slog.Any("parts", userPromptParts), slog.String("system_prompt", finalSystemPrompt))
 	// TODO: We could re-use a flow here maybe, but for simplicity we create a new generate just for each message. We can optimize later if needed.
@@ -252,7 +264,11 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 		genOpts = append(genOpts, ai.WithDocs(ragContextDocs...))
 	}
 
-	genCtx, genCancel := context.WithTimeout(ctx, 120*time.Second)
+	genTimeout := l.timeouts.Generate
+	if genTimeout <= 0 {
+		genTimeout = 120 * time.Second
+	}
+	genCtx, genCancel := context.WithTimeout(ctx, genTimeout)
 	defer genCancel()
 	logger.Info("calling genkit.Generate", slog.String("model", l.model.Name()), slog.Int("history_len", len(hist)), slog.Int("num_tools", len(l.toolRefs)))
 	resp, err := genkit.Generate(genCtx, l.g, genOpts...)
@@ -271,7 +287,10 @@ func (l *Logic) HandleMessage(ctx context.Context, sessionID string, req domain.
 	return resp.Text(), err
 }
 
-func injectSystemPrompt(logger *slog.Logger, systemPrompt string, contextConfig config.ContextConfig) string {
+func injectSystemPrompt(ctx context.Context, logger *slog.Logger, systemPrompt string, contextConfig config.ContextConfig, defaultCmdTimeout time.Duration) string {
+	if defaultCmdTimeout <= 0 {
+		defaultCmdTimeout = 10 * time.Second
+	}
 	var contextInjector strings.Builder
 
 	n := len(contextConfig.StaticInject)
@@ -318,15 +337,22 @@ func injectSystemPrompt(logger *slog.Logger, systemPrompt string, contextConfig 
 			wg.Add(1)
 			go func(i int, dd config.DynamicDataConfig) {
 				defer wg.Done()
+				cmdTimeout := dd.Timeout
+				if cmdTimeout <= 0 {
+					cmdTimeout = defaultCmdTimeout
+				}
+				cmdCtx, cancel := context.WithTimeout(ctx, cmdTimeout)
+				defer cancel()
+
 				var cmd *exec.Cmd
 				if len(dd.Args) > 0 {
 					// Option A: Direct Execution (Safer, handles spaces in args perfectly)
 					// Best for: date, weather-bin --city "New York"
-					cmd = exec.Command(dd.Command, dd.Args...)
+					cmd = exec.CommandContext(cmdCtx, dd.Command, dd.Args...)
 				} else {
 					// Option B: Shell Magic (Allows pipes and redirects)
 					// Best for: "ls | grep .go"
-					cmd = exec.Command("sh", "-c", dd.Command)
+					cmd = exec.CommandContext(cmdCtx, "sh", "-c", dd.Command)
 				}
 
 				out, err := cmd.CombinedOutput()
